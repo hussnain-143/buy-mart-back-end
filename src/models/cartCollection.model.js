@@ -24,7 +24,7 @@ const CartSchema = new Schema(
   { timestamps: true }
 );
 
-// 🔹 Prevent duplicate products for same user
+// Prevent duplicate products for same user
 CartSchema.index({ product_id: 1, user_id: 1 }, { unique: true });
 
 export const CartModel = model("Cart", CartSchema);

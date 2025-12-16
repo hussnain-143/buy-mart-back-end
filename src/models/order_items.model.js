@@ -36,10 +36,10 @@ const OrderItemSchema = new Schema(
   { timestamps: true }
 );
 
-// 🔹 Prevent duplicate products in the same order
+// Prevent duplicate products in the same order
 OrderItemSchema.index({ order_id: 1, product_id: 1 }, { unique: true });
 
-// 🔹 Pre-save hook to calculate total_price
+// Pre-save hook to calculate total_price
 OrderItemSchema.pre("save", function (next) {
   this.total_price = this.unit_price * this.quantity;
   next();

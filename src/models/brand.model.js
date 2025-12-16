@@ -33,14 +33,13 @@ const BrandSchema = new Schema(
   { timestamps: true }
 );
 
-// 🔥 AUTO GENERATE SLUG BEFORE SAVE
+// GENERATE SLUG
 BrandSchema.pre("save", async function () {
   if (this.isModified("name")) {
     this.slug = slugify(this.name, { lower: true, strict: true });
   }
 });
 
-// 📌 Indexing for performance
 BrandSchema.index({ name: 1 });
 BrandSchema.index({ slug: 1 });
 

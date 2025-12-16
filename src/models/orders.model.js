@@ -47,7 +47,7 @@ const OrderSchema = new Schema(
   { timestamps: true }
 );
 
-// 🔹 Pre-save hook to calculate total_amount from OrderItems
+// Pre-save hook to calculate total_amount from OrderItems
 OrderSchema.pre("save", async function (next) {
   try {
     const items = await OrderItemModel.find({ order_id: this._id });
@@ -58,7 +58,6 @@ OrderSchema.pre("save", async function (next) {
   }
 });
 
-// 🔹 Index for faster user queries
 OrderSchema.index({ user_id: 1, createdAt: -1 });
 
 export const OrderModel = model("Order", OrderSchema);

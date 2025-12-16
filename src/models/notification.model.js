@@ -33,13 +33,12 @@ const NotificationSchema = new Schema(
 
     reference_id: {
       type: Schema.Types.ObjectId,
-      default: null, // optional link to order, product, etc.
+      default: null,
     },
   },
-  { timestamps: true } // adds createdAt & updatedAt
+  { timestamps: true }
 );
 
-// Optional index for faster queries by user
 NotificationSchema.index({ user_id: 1, createdAt: -1 });
 
 export const NotificationModel = model("Notification", NotificationSchema);

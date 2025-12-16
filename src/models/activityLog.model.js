@@ -16,13 +16,13 @@ const ActivityLogSchema = new Schema(
 
     reference_id: {
       type: Schema.Types.ObjectId,
-      default: null, // optional related document
+      default: null,
     },
   },
-  { timestamps: true } // adds createdAt automatically
+  { timestamps: true }
 );
 
-// Optional: index by user for faster queries
+
 ActivityLogSchema.index({ user_id: 1 });
 
 export const ActivityLogModel = model("ActivityLog", ActivityLogSchema);

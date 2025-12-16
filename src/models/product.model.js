@@ -76,10 +76,10 @@ const ProductSchema = new Schema(
   { timestamps: true }
 );
 
-// 📌 Add Pagination Plugin
+// Add Pagination Plugin
 ProductSchema.plugin(mongoosePaginate);
 
-// 📌 Indexes for speed
+// Indexes for speed
 ProductSchema.index({ name: "text", desc: "text" });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ category_id: 1 });

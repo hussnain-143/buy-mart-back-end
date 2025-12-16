@@ -31,13 +31,12 @@ const PaymentSchema = new Schema(
       trim: true,
       default: "",
       unique: true,
-      sparse: true, // allows null/empty values
+      sparse: true, 
     },
   },
   { timestamps: true }
 );
 
-// Optional index for faster queries by order
 PaymentSchema.index({ order_id: 1 });
 
 export const PaymentModel = model("Payment", PaymentSchema);
