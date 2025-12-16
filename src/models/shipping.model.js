@@ -19,7 +19,7 @@ const ShippingSchema = new Schema(
       type: String,
       trim: true,
       unique: true,
-      sparse: true, // allows null / optional
+      sparse: true,
       maxlength: 100,
       default: null,
     },
@@ -38,7 +38,7 @@ const ShippingSchema = new Schema(
   { timestamps: true }
 );
 
-// Optional index for faster query by order
+
 ShippingSchema.index({ order_id: 1 });
 
 export const ShippingModel = model("Shipping", ShippingSchema);

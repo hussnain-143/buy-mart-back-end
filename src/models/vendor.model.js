@@ -19,7 +19,7 @@ const VendorSchema = new Schema(
 
     owner: {
       type: Schema.Types.ObjectId,
-      ref: "User",   // vendor is a user
+      ref: "User",  
       required: true,
     },
 
@@ -43,7 +43,6 @@ const VendorSchema = new Schema(
   { timestamps: true }
 );
 
-// 📌 Optional: Speed up find by owner
 VendorSchema.index({ owner: 1 });
 VendorSchema.index({ shop_name: 1 });
 

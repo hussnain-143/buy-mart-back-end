@@ -33,7 +33,7 @@ const CategorySchema = new Schema(
   { timestamps: true }
 );
 
-// 🔥 AUTO GENERATE SLUG BEFORE SAVE
+// GENERATE SLUG 
 CategorySchema.pre("save", function (next) {
   if (this.isModified("name")) {
     this.slug = slugify(this.name, { lower: true });
@@ -41,7 +41,6 @@ CategorySchema.pre("save", function (next) {
   next();
 });
 
-// Optional: create an index for faster queries
 CategorySchema.index({ name: 1, slug: 1 });
 
 export const CategoryModel = model("Category", CategorySchema);

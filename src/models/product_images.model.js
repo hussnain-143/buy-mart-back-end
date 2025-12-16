@@ -23,13 +23,13 @@ const imageSchema = new Schema(
   { timestamps: true }
 );
 
-// ⭐ Only 1 primary per product (DB-level)
+// Only 1 primary per product (DB-level)
 imageSchema.index(
   { product_id: 1, isPrimary: 1 },
   { unique: true, partialFilterExpression: { isPrimary: true } }
 );
 
-// ⭐ AUTO-SWITCH logic (App-level)
+// AUTO-SWITCH logic (App-level)
 imageSchema.pre("save", async function (next) {
   if (this.isPrimary) {
     await this.constructor.updateMany(
