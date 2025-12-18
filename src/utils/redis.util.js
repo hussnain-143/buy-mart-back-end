@@ -1,4 +1,4 @@
-import { redisClient } from "../redis";
+import { redisClient } from "../../redis/index.js";
 
 /**
  * Set value in Redis with TTL

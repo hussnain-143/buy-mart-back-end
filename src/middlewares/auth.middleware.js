@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
-import { apiError } from "../utils/apiError";
-import { getCache, setCache } from "../utils/redis.util";
-import User from "../models/user.model";
-import { options } from "../constant";
+import { apiError } from "../utils/apiError.js";
+import { getCache, setCache } from "../utils/redis.util.js";
+import { UserModel as User } from "../models/user.model.js";
+import { options } from "../constant.js";
 
 /**
  * @desc Auth middleware to protect private routes
