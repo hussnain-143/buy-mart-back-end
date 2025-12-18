@@ -7,10 +7,10 @@ import {
   Update_Profile,
   Update_Password,
   Update_Address,
-} from "../controller/user.contoller";
+} from "../controller/user.contoller.js";
 
-import { authMiddleware } from "../middleware/auth.middleware";
-import { upload } from "../middlewares/multer.middleware";
+import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { upload } from "../middlewares/multer.middleware.js";
 
 // Create router for all user-related APIs
 export const userRoutes = express.Router();

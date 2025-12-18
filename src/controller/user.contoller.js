@@ -1,10 +1,10 @@
-import User from "../models/user.model";
-import { apiError } from "../utils/apiError";
-import { apiResponse } from "../utils/apiResponse";
-import { asyncHandler } from "../utils/asyncHandler";
-import { options } from "../constant";
-import { setCache, deleteCache } from "../utils/redis.util";
-import { uploadToCloudinary } from "../utils/cloudinary";
+import { UserModel as User } from "../models/user.model.js";
+import { apiError } from "../utils/apiError.js";
+import { apiResponse } from "../utils/apiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { options } from "../constant.js";
+import { setCache, deleteCache } from "../utils/redis.util.js";
+import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 
 /* =====================================================
    TOKEN GENERATOR
@@ -32,30 +32,40 @@ const generateAccessAndRefreshTokens = async (id) => {
    SIGNUP USER
 ===================================================== */
 export const Signup_User = asyncHandler(async (req, res) => {
-  const { firstName, lastName, userName, email, password, address } = req.body;
 
-  // Validate required fields
+  const { firstName, lastName, userName, email, password, role } = req.body;
+
   if (!firstName || !lastName || !userName || !email || !password) {
     throw new apiError(400, "All required fields must be provided");
   }
 
-  // Check if user already exists
   const existingUser = await User.findOne({
     $or: [{ email }, { userName }],
   });
   if (existingUser) throw new apiError(409, "User already exists");
 
-  // Auto-assign role
-  const role = userName.toLowerCase() === "admin" ? "Admin" : "user";
-
-  // Upload profile image (optional)
-  let profileUrl = "";
-  if (req.file?.path) {
-    const uploadResult = await uploadToCloudinary(req.file.path);
-    profileUrl = uploadResult?.secure_url;
+  // Parse address
+  let parsedAddress = [];
+  if (req.body.address) {
+    try {
+      parsedAddress = JSON.parse(req.body.address);
+    } catch (err) {
+      throw new apiError(400, "Invalid address format");
+    }
   }
 
-  // Create user
+  // Upload profile
+  let profileUrl = "";
+  if (req.file?.path) {
+    try {
+      const uploadResult = await uploadToCloudinary(req.file.path);
+      profileUrl = uploadResult?.secure_url;
+    } catch (err) {
+      console.error("Cloudinary upload failed:", err);
+      profileUrl = `/uploads/${req.file.filename}`;
+    }
+  }
+
   const user = await User.create({
     firstName,
     lastName,
@@ -64,17 +74,16 @@ export const Signup_User = asyncHandler(async (req, res) => {
     password,
     role,
     profileUrl,
-    address: address || [],
+    address: parsedAddress,
   });
 
-  const createdUser = await User.findById(user._id)
-    .select("-password -refreshToken");
+  const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
-  return res.status(201).json(
-    new apiResponse(201, "User registered successfully", {
-      user: createdUser,
-    })
-  );
+  return res.status(201).json({
+    status: 201,
+    message: "User registered successfully",
+    data: { user: createdUser },
+  });
 });
 
 /* =====================================================

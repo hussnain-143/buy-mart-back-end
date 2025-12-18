@@ -122,6 +122,6 @@ UserSchema.methods.generateRefreshToken = function () {
   );
 };
 
-UserSchema.index({ userName: 1 });
+// UserSchema.index({ userName: 1 });
 
 export const UserModel = model("User", UserSchema)
