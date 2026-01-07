@@ -136,7 +136,7 @@ export const Get_User = asyncHandler(async (req, res) => {
 });
 
 /* =====================================================
-   LOGOUT USER
+  LOGOUT USER
 ===================================================== */
 export const Logout_User = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -154,7 +154,7 @@ export const Logout_User = asyncHandler(async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE PROFILE (WITH IMAGE UPLOAD)
+  UPDATE PROFILE (WITH IMAGE UPLOAD)
 ===================================================== */
 export const Update_Profile = asyncHandler(async (req, res) => {
   const { firstName, lastName } = req.body;
@@ -213,7 +213,7 @@ export const Update_Address = asyncHandler(async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE PASSWORD
+  UPDATE PASSWORD
 ===================================================== */
 export const Update_Password = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;

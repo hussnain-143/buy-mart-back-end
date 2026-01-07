@@ -24,6 +24,17 @@ const CategorySchema = new Schema(
       ref: "Category",
       default: null,
     },
+
+    user_id: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    is_approved: {
+      type: Boolean,
+      default: false,
+    },
     
     isActive: {
       type: Boolean,
