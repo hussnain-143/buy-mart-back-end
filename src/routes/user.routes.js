@@ -7,7 +7,7 @@ import {
   Update_Profile,
   Update_Password,
   Update_Address,
-} from "../controller/user.contoller.js";
+} from "../controller/user.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";

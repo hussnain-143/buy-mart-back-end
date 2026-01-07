@@ -25,6 +25,17 @@ const BrandSchema = new Schema(
       default: "",
     },
 
+    user_id: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    is_approved: {
+      type: Boolean,
+      default: false,
+    },
+
     isActive: {
       type: Boolean,
       default: true,
