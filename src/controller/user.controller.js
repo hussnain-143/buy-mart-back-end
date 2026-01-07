@@ -33,9 +33,9 @@ const generateAccessAndRefreshTokens = async (id) => {
 ===================================================== */
 export const Signup_User = asyncHandler(async (req, res) => {
 
-  const { firstName, lastName, userName, email, password, role } = req.body;
+  const { firstName, lastName, userName, email, password, role , city , street , houseNo } = req.body;
 
-  if (!firstName || !lastName || !userName || !email || !password) {
+  if (!firstName || !lastName || !userName || !email || !password || !role || !city || !street || !houseNo) {
     throw new apiError(400, "All required fields must be provided");
   }
 
@@ -46,9 +46,15 @@ export const Signup_User = asyncHandler(async (req, res) => {
 
   // Parse address
   let parsedAddress = [];
-  if (req.body.address) {
+
+  if (req.body.city && req.body.street && req.body.houseNo) {
     try {
-      parsedAddress = JSON.parse(req.body.address);
+
+      parsedAddress = [{
+        city: req.body.city,
+        street: req.body.street,
+        houseNo: req.body.houseNo,
+      }];
     } catch (err) {
       throw new apiError(400, "Invalid address format");
     }
