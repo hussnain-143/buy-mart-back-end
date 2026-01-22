@@ -6,6 +6,8 @@ import { options } from "../constant.js";
 import { setCache, deleteCache } from "../utils/redis.util.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 
+import { Create_Log_Entry } from "./log.controller.js";
+
 /* =====================================================
    TOKEN GENERATOR
    - Creates access & refresh tokens
@@ -84,6 +86,19 @@ export const Signup_User = asyncHandler(async (req, res) => {
   });
 
   const createdUser = await User.findById(user._id).select("-password -refreshToken");
+
+  if (createdUser) {
+    // Create log entry for new user registration
+    await Create_Log_Entry({
+      body: {
+        user_id: createdUser._id,
+        action: "User Registration  with Username: " + createdUser.userName,
+        reference_id: null,
+      },
+    }, {
+      status: () => ({ json: () => {} }),
+    });
+  }
 
   return res.status(201).json({
     status: 201,
@@ -186,6 +201,17 @@ export const Update_Profile = asyncHandler(async (req, res) => {
   // Update Redis cache
   await setCache(`user:${req.user._id}`, updatedUser, 60 * 60 * 5);
 
+  // Create log entry for profile update
+  await Create_Log_Entry({
+    body: {
+      user_id: req.user._id,
+      action: "User Profile Updated for Username: " + updatedUser.userName,
+      reference_id: null,
+    },
+  }, {
+    status: () => ({ json: () => {} }),
+  });
+
   return res.status(200).json(
     new apiResponse(200, "User profile updated successfully", {
       user: updatedUser,
@@ -210,6 +236,20 @@ export const Update_Address = asyncHandler(async (req, res) => {
   ).select("-password -refreshToken");
 
   if (!updatedUser) throw new apiError(404, "User not found");
+
+  // Update Redis cache
+  await setCache(`user:${req.user._id}`, updatedUser, 60 * 60 * 5);
+
+  // Create log entry for address update
+  await Create_Log_Entry({
+    body: {
+      user_id: req.user._id,
+      action: "User Address Updated for Username: " + updatedUser.userName,
+      reference_id: null,
+    },
+  }, {
+    status: () => ({ json: () => {} }),
+  }); 
 
   return res.status(200).json(
     new apiResponse(200, "Address updated successfully", {
@@ -240,6 +280,21 @@ export const Update_Password = asyncHandler(async (req, res) => {
 
   // Remove cached user (force re-login)
   await deleteCache(`user:${req.user._id}`);
+
+  // Clear cookies
+  res.clearCookie("accessToken");
+  res.clearCookie("refreshToken");
+  
+  // Create log entry for password update
+  await Create_Log_Entry({
+    body: {
+      user_id: req.user._id,
+      action: "User Password Updated for Username: " + user.userName,
+      reference_id: null,
+    },
+  }, {
+    status: () => ({ json: () => {} }),
+  });
 
   return res.status(200).json(
     new apiResponse(
