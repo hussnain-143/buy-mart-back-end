@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 
 import {userRoutes} from "./routes/user.routes.js"
+import { activityLogRoutes } from "./routes/activityLog.routes.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 
 
@@ -22,6 +23,7 @@ app.use(express.urlencoded({extended: true}));
 app.use(cookieParser(process.env.COOKIE_SECRET)); 
 
 app.use("/api/v1/user", userRoutes);
+app.use("/api/v1/activity-logs", activityLogRoutes);
 
 app.use(errorHandler)
 
