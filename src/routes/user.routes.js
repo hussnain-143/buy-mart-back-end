@@ -9,7 +9,7 @@ import {
   Update_Address,
 } from "../controller/user.controller.js";
 
-import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { authMiddleware, logoutMiddleware } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 // Create router for all user-related APIs
@@ -36,9 +36,9 @@ userRoutes.post("/login", Login_User);
 /**
  * Logout user
  * - Clears cookies / tokens
- * - Requires authentication
+ * - Requires authentication (allows expired tokens)
  */
-userRoutes.post("/logout", authMiddleware, Logout_User);
+userRoutes.post("/logout", logoutMiddleware, Logout_User);
 
 /* ============================
    USER PROFILE ROUTES

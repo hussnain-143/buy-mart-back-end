@@ -5,10 +5,10 @@ import { UserModel as User } from "../models/user.model.js";
 import { options } from "../constant.js";
 
 /**
- * @desc Auth middleware to protect private routes
- * Checks accessToken in cookies, verifies it, and fetches user
+ * @desc Core authentication logic
+ * @param {boolean} ignoreExpiration - Whether to allow expired tokens (e.g., for logout)
  */
-export const authMiddleware = async (req, res, next) => {
+const authenticate = async (req, next, ignoreExpiration = false) => {
   try {
     // 1. Get token from cookies
     const token = req.cookies?.accessToken;
@@ -17,12 +17,15 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     // 2. Verify JWT
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded?.id) {
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, {
+      ignoreExpiration,
+    });
+
+    if (!decoded?.userId) {
       throw new apiError(401, "Invalid token");
     }
 
-    const userId = decoded.id;
+    const userId = decoded.userId;
 
     // 3. Check Redis cache first
     let user = await getCache(`user:${userId}`);
@@ -51,4 +54,20 @@ export const authMiddleware = async (req, res, next) => {
     }
     next(error);
   }
+};
+
+/**
+ * @desc Strict Auth middleware to protect private routes
+ * Rejects expired tokens.
+ */
+export const authMiddleware = (req, res, next) => {
+  authenticate(req, next, false);
+};
+
+/**
+ * @desc Permissive Auth middleware for logout
+ * Allows expired tokens so specific cleanup can still happen.
+ */
+export const logoutMiddleware = (req, res, next) => {
+  authenticate(req, next, true);
 };
