@@ -10,11 +10,23 @@ import { options } from "../constant.js";
  */
 const authenticate = async (req, next, ignoreExpiration = false) => {
   try {
-    // 1. Get token from cookies
-    const token = req.cookies?.accessToken;
+    // 1. Get token from cookies (primary) or Authorization header (fallback)
+    let token = req.cookies?.accessToken;
+    
+    // If not in cookies, try Authorization header
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith("Bearer ")) {
+        token = authHeader.slice(7); // Remove "Bearer " prefix
+      }
+    }
+    
     if (!token) {
+      console.error("❌ No token found in cookies or Authorization header");
       throw new apiError(401, "Not authorized, access token missing");
     }
+
+    console.log("✓ Token found:", token.substring(0, 20) + "...");
 
     // 2. Verify JWT
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, {
@@ -22,18 +34,24 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
     });
 
     if (!decoded?.userId) {
+      console.error("❌ Decoded token has no userId");
       throw new apiError(401, "Invalid token");
     }
+
+    console.log("✓ Token verified for user:", decoded.userId);
 
     const userId = decoded.userId;
 
     // 3. Check Redis cache first
     let user = await getCache(`user:${userId}`);
+    // let user = null; // Temporarily disable cache to avoid stale data issues
+
 
     // 4. If not in cache, fetch from DB
     if (!user) {
       user = await User.findById(userId).select("-password -refreshToken");
       if (!user) {
+        console.error("❌ User not found:", userId);
         throw new apiError(404, "User not found");
       }
 
@@ -43,9 +61,11 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
 
     // 6. Attach user to request object
     req.user = user;
+    console.log("✓ User attached to request");
 
     next();
   } catch (error) {
+    console.error("❌ Auth error:", error.message);
     if (error.name === "TokenExpiredError") {
       return next(new apiError(401, "Access token expired"));
     }
@@ -60,14 +80,14 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
  * @desc Strict Auth middleware to protect private routes
  * Rejects expired tokens.
  */
-export const authMiddleware = (req, res, next) => {
-  authenticate(req, next, false);
+export const authMiddleware = async (req, res, next) => {
+  await authenticate(req, next, false);
 };
 
 /**
  * @desc Permissive Auth middleware for logout
  * Allows expired tokens so specific cleanup can still happen.
  */
-export const logoutMiddleware = (req, res, next) => {
-  authenticate(req, next, true);
+export const logoutMiddleware = async (req, res, next) => {
+  await authenticate(req, next, true);
 };
