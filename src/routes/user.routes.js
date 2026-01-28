@@ -7,6 +7,7 @@ import {
   Update_Profile,
   Update_Password,
   Update_Address,
+  Refresh_Access_Token,
 } from "../controller/user.controller.js";
 
 import { authMiddleware, logoutMiddleware } from "../middlewares/auth.middleware.js";
@@ -39,6 +40,13 @@ userRoutes.post("/login", Login_User);
  * - Requires authentication (allows expired tokens)
  */
 userRoutes.post("/logout", logoutMiddleware, Logout_User);
+
+/**
+ * Refresh access token
+ * - Uses refresh token from cookies to generate new access token
+ * - No authentication required (uses refresh token)
+ */
+userRoutes.post("/refresh-token", Refresh_Access_Token);
 
 /* ============================
    USER PROFILE ROUTES

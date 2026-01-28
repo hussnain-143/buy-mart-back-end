@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import { UserModel as User } from "../models/user.model.js";
 import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
@@ -143,6 +144,106 @@ export const Login_User = asyncHandler(async (req, res) => {
         refreshToken,
       })
     );
+});
+
+/* =====================================================
+   REFRESH ACCESS TOKEN
+===================================================== */
+export const Refresh_Access_Token = asyncHandler(async (req, res) => {
+  // Try to get refresh token from cookies first (primary method)
+  let incomingRefreshToken = req.cookies?.refreshToken;
+  console.log("🔄 Refresh Token Request:", {
+    hasCookie: !!req.cookies?.refreshToken,
+    hasAuthHeader: !!req.headers.authorization,
+  });
+
+  // If not in cookies, try to get from Authorization header (fallback)
+  if (!incomingRefreshToken && req.headers.authorization) {
+    const authHeader = req.headers.authorization;
+    if (authHeader.startsWith("Bearer ")) {
+      incomingRefreshToken = authHeader.slice(7); // Remove "Bearer " prefix
+      console.log("📝 Using refresh token from Authorization header");
+    }
+  }
+
+  if (!incomingRefreshToken) {
+    console.error("❌ No refresh token found");
+    throw new apiError(401, "Refresh token is required");
+  }
+
+  try {
+    // Allow expired refresh tokens to be verified (they're meant to be long-lived)
+    // We check the token in DB as the source of truth
+    const decoded = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET,
+      { ignoreExpiration: true } // Allow expired tokens to be verified
+    );
+
+    console.log("✓ Refresh token decoded for user:", decoded.userId);
+
+    if (!decoded?.userId) {
+      throw new apiError(401, "Invalid refresh token structure");
+    }
+
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      console.error("❌ User not found:", decoded.userId);
+      throw new apiError(401, "User not found");
+    }
+
+    // Check if refresh token matches the one stored in database (source of truth)
+    if (incomingRefreshToken !== user.refreshToken) {
+      console.error("❌ Refresh token mismatch - invalid or revoked");
+      throw new apiError(401, "Refresh token is invalid or revoked");
+    }
+
+    console.log("✓ Refresh token matches DB record");
+
+    // Verify token wasn't expired for more than 30 days (or configured expiry)
+    // This prevents using very old tokens
+    if (decoded.exp) {
+      const tokenAge = Math.floor(Date.now() / 1000) - decoded.exp;
+      const maxAllowedAge = 60 * 60 * 24 * 30; // 30 days in seconds
+      
+      if (tokenAge > maxAllowedAge) {
+        console.error("❌ Refresh token too old:", tokenAge, "seconds");
+        throw new apiError(401, "Refresh token has expired");
+      }
+    }
+
+    // Generate new tokens
+    const { accessToken, refreshToken } =
+      await generateAccessAndRefreshTokens(user._id);
+
+    console.log("✓ New access token generated for user:", user._id);
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+        new apiResponse(200, "Access token refreshed successfully", {
+          accessToken,
+          refreshToken,
+        })
+      );
+  } catch (error) {
+    console.error("❌ Token refresh error:", error.message);
+    
+    if (error.message === "Refresh token has expired") {
+      throw error; // Re-throw our custom error
+    }
+    if (error.name === "JsonWebTokenError") {
+      throw new apiError(401, "Invalid refresh token");
+    }
+    if (error.isApiError) {
+      throw error; // Re-throw API errors
+    }
+    
+    throw new apiError(401, "Failed to refresh token");
+  }
 });
 
 /* =====================================================

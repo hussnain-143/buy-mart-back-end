@@ -3,7 +3,8 @@ export class apiError extends Error {
     (super(message),
       (this.statusCode = statusCode),
       (this.errors = errors),
-      (this.success = false));
+      (this.success = false),
+      (this.isApiError = true));
 
     if (stack) {
       this.stack = stack;
