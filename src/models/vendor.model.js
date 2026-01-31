@@ -19,7 +19,7 @@ const VendorSchema = new Schema(
 
     owner: {
       type: Schema.Types.ObjectId,
-      ref: "User",  
+      ref: "User",
       required: true,
     },
 
@@ -30,6 +30,17 @@ const VendorSchema = new Schema(
     },
 
     cover_image: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    subscription: {
+      type: Schema.Types.ObjectId,
+      ref: "VendorSubscription",
+    },
+
+    stripe_customer_id: {
       type: String,
       trim: true,
       default: "",

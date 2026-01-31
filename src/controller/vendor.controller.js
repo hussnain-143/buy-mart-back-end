@@ -13,7 +13,7 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     console.log("📨 Request body:", req.body);
     console.log("📂 Request files:", req.files);
     console.log("👤 User:", req.user?._id);
-    
+
     const { shop_name, description } = req.body;
 
     if (!shop_name || !description) {
@@ -25,6 +25,19 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     const existingVendor = await VendorModel.findOne({ owner: req.user._id });
     if (existingVendor) {
       return next(new apiError(400, "User already has a vendor"));
+    }
+
+    // Check for active subscription
+    const ActiveSubscription = await import("../models/vendor_subscription.model.js").then(m => m.VendorSubscriptionModel);
+    const subscription = await ActiveSubscription.findOne({
+      user: req.user._id,
+      is_active: true,
+      status: "active",
+      end_date: { $gt: new Date() }
+    });
+
+    if (!subscription) {
+      return next(new apiError(403, "Active subscription required to create a vendor account"));
     }
 
     let profileImageUrl = "";
@@ -60,7 +73,13 @@ export const createVendor = asyncHandler(async (req, res, next) => {
       owner: req.user._id,
       profile_image: profileImageUrl,
       cover_image: coverImageUrl,
+      subscription: subscription._id,
+      stripe_customer_id: subscription.stripe_customer_id
     });
+
+    // Update subscription with vendor ID
+    subscription.vendor = newVendor._id;
+    await subscription.save();
 
     // Log vendor creation
     if (newVendor) {
@@ -71,7 +90,7 @@ export const createVendor = asyncHandler(async (req, res, next) => {
           reference_id: newVendor._id,
         },
       }, {
-        status: () => ({ json: () => {} }),
+        status: () => ({ json: () => { } }),
       });
     }
 
