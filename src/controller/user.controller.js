@@ -8,6 +8,7 @@ import { setCache, deleteCache } from "../utils/redis.util.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 
 import { Create_Log_Entry } from "./log.controller.js";
+import { VendorSubscriptionModel } from "../models/vendor_subscription.model.js";
 
 /* =====================================================
    TOKEN GENERATOR
@@ -127,8 +128,15 @@ export const Login_User = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken } =
     await generateAccessAndRefreshTokens(user._id);
 
-  const loginUser = await User.findById(user._id)
-    .select("-password -refreshToken");
+  const tempUser = await User.findById(user._id)
+  .select("-password -refreshToken")
+  .lean();
+
+  const vendor_sub = await VendorSubscriptionModel.findOne({
+    user: user._id,
+  }).populate('vendor').lean();
+
+  const loginUser  = { ...tempUser, vendor_subscription: vendor_sub };
 
   // Cache user for 5 hours
   await setCache(`user:${user._id}`, loginUser, 60 * 60 * 5);

@@ -2,9 +2,15 @@ import { model, Schema } from "mongoose";
 
 const VendorSubscriptionSchema = new Schema(
     {
-        vendor: {   
+        vendor: {
             type: Schema.Types.ObjectId,
             ref: "Vendor",
+            required: false,
+        },
+
+        user: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
             required: true,
         },
 
@@ -25,6 +31,28 @@ const VendorSubscriptionSchema = new Schema(
             type: Number,
             required: [true, "Duration in days is required"],
             min: 1,
+        },
+
+        stripe_subscription_id: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        stripe_customer_id: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        status: {
+            type: String,
+            enum: ["active", "canceled", "past_due", "incomplete"],
+            default: "active",
+        },
+
+        current_period_end: {
+            type: Date,
         },
 
         start_date: {
