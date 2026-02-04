@@ -1,19 +1,17 @@
 import { VendorModel } from "../models/vendor.model.js";
+import { VendorSubscriptionModel } from "../models/vendor_subscription.model.js";
 import { apiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { setCache, getCache, deleteCache } from "../utils/redis.util.js";
 
 /**
  * Create a new vendor
  */
 export const createVendor = asyncHandler(async (req, res, next) => {
   try {
-    console.log("📨 Request body:", req.body);
-    console.log("📂 Request files:", req.files);
-    console.log("👤 User:", req.user?._id);
-
     const { shop_name, description } = req.body;
 
     if (!shop_name || !description) {
@@ -28,12 +26,11 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     }
 
     // Check for active subscription
-    const ActiveSubscription = await import("../models/vendor_subscription.model.js").then(m => m.VendorSubscriptionModel);
-    const subscription = await ActiveSubscription.findOne({
+    const subscription = await VendorSubscriptionModel.findOne({
       user: req.user._id,
       is_active: true,
       status: "active",
-      end_date: { $gt: new Date() }
+      end_date: { $gt: new Date() },
     });
 
     if (!subscription) {
@@ -46,27 +43,26 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     // Upload Profile Image
     if (req.files?.profile_image?.[0]) {
       try {
-        const result = await uploadToCloudinary(
-          req.files.profile_image[0].path
-        );
+        const result = await uploadToCloudinary(req.files.profile_image[0].path);
         profileImageUrl = result.secure_url;
       } catch (error) {
-        console.error("Profile image upload failed:", error);
+        console.error("❌ Profile image upload failed:", error);
+        return next(new apiError(500, "Failed to upload profile image"));
       }
     }
 
     // Upload Cover Image
     if (req.files?.cover_image?.[0]) {
       try {
-        const result = await uploadToCloudinary(
-          req.files.cover_image[0].path
-        );
+        const result = await uploadToCloudinary(req.files.cover_image[0].path);
         coverImageUrl = result.secure_url;
       } catch (error) {
-        console.error("Cover image upload failed:", error);
+        console.error("❌ Cover image upload failed:", error);
+        return next(new apiError(500, "Failed to upload cover image"));
       }
     }
 
+    // Create vendor
     const newVendor = await VendorModel.create({
       shop_name,
       desc: description,
@@ -74,7 +70,7 @@ export const createVendor = asyncHandler(async (req, res, next) => {
       profile_image: profileImageUrl,
       cover_image: coverImageUrl,
       subscription: subscription._id,
-      stripe_customer_id: subscription.stripe_customer_id
+      stripe_customer_id: subscription.stripe_customer_id,
     });
 
     // Update subscription with vendor ID
@@ -82,23 +78,87 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     await subscription.save();
 
     // Log vendor creation
-    if (newVendor) {
-      await Create_Log_Entry({
-        body: {
-          user_id: req.user._id,
-          action: "Vendor Created with Shop Name: " + shop_name,
-          reference_id: newVendor._id,
-        },
-      }, {
-        status: () => ({ json: () => { } }),
-      });
-    }
+    await Create_Log_Entry({
+      body: {
+        user_id: req.user._id,
+        action: `Vendor Created with Shop Name: ${shop_name}`,
+        reference_id: newVendor._id,
+      },
+    });
 
-    return res
-      .status(201)
-      .json(new apiResponse(201, "Vendor created successfully", newVendor));
+    // Invalidate all vendors cache
+    await deleteCache("all_vendors");
+
+    return res.status(201).json(new apiResponse(201, "Vendor created successfully", newVendor));
   } catch (error) {
     console.error("❌ Vendor creation error:", error);
+    next(error);
+  }
+});
+
+/**
+ * Get All Vendors
+ */
+export const getAllVendors = asyncHandler(async (req, res, next) => {
+  try {
+    const cachedVendors = await getCache("all_vendors");
+    if (cachedVendors) {
+      return res.status(200).json(new apiResponse(200, "Vendors retrieved successfully", cachedVendors));
+    }
+
+    const vendors = await VendorModel.find()
+      .populate("owner")
+      .select("-password -refreshToken")
+      .exec();
+
+    // Cache for 5 hours
+    await setCache("all_vendors", vendors, 60 * 60 * 5);
+
+    return res.status(200).json(new apiResponse(200, "Vendors retrieved successfully", vendors));
+  } catch (error) {
+    console.error("❌ Get all vendors error:", error);
+    next(error);
+  }
+});
+
+/**
+ * Approve Vendor
+ */
+export const approveVendor = asyncHandler(async (req, res, next) => {
+  try {
+    const { vendor_id } = req.body;
+
+    if (!vendor_id) {
+      return next(new apiError(400, "Vendor ID is required"));
+    }
+
+    const vendor = await VendorModel.findById(vendor_id);
+    if (!vendor) {
+      return next(new apiError(404, "Vendor not found"));
+    }
+
+    if (vendor.is_active) {
+      return next(new apiError(400, "Vendor is already active"));
+    }
+
+    vendor.is_active = true;
+    await vendor.save();
+
+    // Invalidate all vendors cache
+    await deleteCache("all_vendors");
+
+    // Log vendor approval
+    await Create_Log_Entry({
+      body: {
+        user_id: req.user._id,
+        action: `Vendor Approved for Shop Name: ${vendor.shop_name}`,
+        reference_id: vendor._id,
+      },
+    });
+
+    return res.status(200).json(new apiResponse(200, "Vendor approved successfully", vendor));
+  } catch (error) {
+    console.error("❌ Approve vendor error:", error);
     next(error);
   }
 });
