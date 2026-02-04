@@ -1,5 +1,5 @@
 import express from "express";
-import { createVendor } from "../controller/vendor.controller.js";
+import { createVendor , getAllVendors , approveVendor } from "../controller/vendor.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
@@ -28,5 +28,8 @@ vendorRoutes.post(
   },
   createVendor
 );
+
+vendorRoutes.get("/all", authMiddleware, getAllVendors);
+vendorRoutes.post('/approve', authMiddleware, approveVendor);
 
 export { vendorRoutes };
