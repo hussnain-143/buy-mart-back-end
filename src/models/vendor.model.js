@@ -46,6 +46,12 @@ const VendorSchema = new Schema(
       default: "",
     },
 
+    stripe_vendor_id:{
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     is_active: {
       type: Boolean,
       default: false,

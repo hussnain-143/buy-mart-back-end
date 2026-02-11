@@ -162,3 +162,48 @@ export const approveVendor = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Get Vendor Strip Id
+ */
+export const getVendorStripeId = asyncHandler(async (req, res, next) => {
+  try {
+    const vendor = await VendorModel.findOne({ owner: req.user._id , is_active : true });
+    if (!vendor) {
+      return next(new apiError(404, "Vendor not found"));
+    }
+
+    return res.status(200).json(new apiResponse(200, "Stripe Vendor ID retrieved successfully", { stripe_vendor_id: vendor.stripe_vendor_id }));
+  } catch (error) {
+    console.error("❌ Get vendor Stripe ID error:", error);
+    next(error);
+  }
+});
+
+/**
+ * Set Vendor Stripe Id
+ * 
+ */
+export const setVendorStripeId = asyncHandler(async (req, res, next) => {
+  const { stripe_vendor_id } = req.body;
+
+  if (!stripe_vendor_id) {
+    return next(new apiError(400, "Stripe Vendor ID is required"));
+  }
+
+  const updatedVendor = await VendorModel.findOneAndUpdate(
+    { owner: req.user._id, is_active: true },
+    { stripe_vendor_id },
+    { new: true }
+  );
+
+  if (!updatedVendor) {
+    return next(new apiError(404, "Vendor not found"));
+  }
+
+  return res
+    .status(200)
+    .json(
+      new apiResponse(200, "Stripe Vendor ID updated successfully", updatedVendor)
+    );
+});

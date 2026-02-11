@@ -1,5 +1,9 @@
 import express from "express";
-import { createVendor , getAllVendors , approveVendor } from "../controller/vendor.controller.js";
+import { createVendor , 
+         getAllVendors , 
+         approveVendor , 
+         getVendorStripeId ,
+         setVendorStripeId } from "../controller/vendor.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
@@ -31,5 +35,7 @@ vendorRoutes.post(
 
 vendorRoutes.get("/all", authMiddleware, getAllVendors);
 vendorRoutes.post('/approve', authMiddleware, approveVendor);
+vendorRoutes.get("/stripe-id", authMiddleware, getVendorStripeId);
+vendorRoutes.put("/stripe-id", authMiddleware, setVendorStripeId);
 
 export { vendorRoutes };
