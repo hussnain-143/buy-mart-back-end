@@ -75,6 +75,59 @@ export const createCheckoutSession = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Create Stripe checkout session for product purchase
+ */
+export const createProductCheckoutSession = asyncHandler(async (req, res, next) => {
+  try {
+    const { items, shippingAddress, email, fullName } = req.body;
+    const userId = req.user._id || req.user.id;
+
+    if (!items || items.length === 0) {
+      return next(new apiError(400, "Cart items are required"));
+    }
+
+    // Create line items for Stripe
+    const lineItems = items.map(item => ({
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: item.product_id.name,
+          images: [item.product_id.images?.[0]?.url || ""],
+          description: item.product_id.description?.substring(0, 100),
+        },
+        unit_amount: Math.round((item.product_id.discount_price > 0 ? item.product_id.discount_price : item.product_id.price) * 100),
+      },
+      quantity: item.quantity,
+    }));
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      customer_email: email,
+      line_items: lineItems,
+      success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}&type=product`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+      metadata: {
+        userId: userId.toString(),
+        shippingAddress,
+        type: "product"
+      },
+    });
+
+    return res
+      .status(200)
+      .json(new apiResponse(200, "Product checkout session created", {
+        sessionId: session.id,
+        url: session.url,
+      }));
+  } catch (error) {
+    console.error("Error creating product checkout session:", error);
+    return next(new apiError(500, "Failed to create product checkout session"));
+  }
+});
+
+/**
  * Verify checkout session and return session details
  */
 export const verifySession = asyncHandler(async (req, res, next) => {
@@ -97,10 +150,11 @@ export const verifySession = asyncHandler(async (req, res, next) => {
       .status(200)
       .json(new apiResponse(200, "Session verified", {
         sessionId: session.id,
-        customerId: session.customer.id,
+        customerId: session.customer?.id,
         subscriptionId: session.subscription?.id,
         userId: session.metadata?.userId,
         paymentStatus: session.payment_status,
+        metadata: session.metadata
       }));
   } catch (error) {
     console.error("Error verifying session:", error);

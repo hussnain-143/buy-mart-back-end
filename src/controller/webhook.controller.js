@@ -2,6 +2,7 @@ import { stripe } from "../utils/stripe.js";
 import { createSubscription, updateSubscriptionStatus } from "../service/vendorSubscription.service.js";
 import { VendorModel } from "../models/vendor.model.js";
 import { VendorSubscriptionModel } from "../models/vendor_subscription.model.js";
+import { Create_Log_Entry } from "./log.controller.js";
 
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -67,14 +68,14 @@ export const handleStripeWebhook = async (req, res) => {
               await vendor.save();
 
               await Create_Log_Entry({
-                    body: {
-                      user_id: userId,
-                      action: "Vendor Subscription Created for User: " + vendor.userName,
-                      reference_id: subscription._id,
-                    },
-                  }, {
-                    status: () => ({ json: () => {} }),
-                  });
+                body: {
+                  user_id: userId,
+                  action: "Vendor Subscription Created for User ID: " + userId,
+                  reference_id: subscription._id,
+                },
+              }, {
+                status: () => ({ json: () => { } }),
+              });
             }
           } else {
             // Update existing
@@ -85,19 +86,19 @@ export const handleStripeWebhook = async (req, res) => {
             await subscription.save();
 
             await Create_Log_Entry({
-                  body: {
-                    user_id: userId,
-                    action: "Vendor Subscription Updated for User: " + (vendor ? vendor.userName : "Unknown"),
-                    reference_id: subscription._id,
-                  },
-                }, {
-                  status: () => ({ json: () => {} }),
-                });
+              body: {
+                user_id: userId,
+                action: "Vendor Subscription Updated for User ID: " + userId,
+                reference_id: subscription._id,
+              },
+            }, {
+              status: () => ({ json: () => { } }),
+            });
           }
         }
 
-        
-        
+
+
         break;
       }
 
@@ -108,14 +109,14 @@ export const handleStripeWebhook = async (req, res) => {
           { status: "canceled", is_active: false }
         );
         await Create_Log_Entry({
-              body: {
-                user_id: null,
-                action: "Vendor Subscription Canceled for Subscription ID: " + subscription.id,
-                reference_id: subscription.id,
-              },
-            }, {
-              status: () => ({ json: () => {} }),
-            })
+          body: {
+            user_id: null,
+            action: "Vendor Subscription Canceled for Subscription ID: " + subscription.id,
+            reference_id: subscription.id,
+          },
+        }, {
+          status: () => ({ json: () => { } }),
+        })
         break;
       }
 
@@ -136,15 +137,15 @@ export const handleStripeWebhook = async (req, res) => {
               end_date: currentPeriodEnd
             }
           );
-            await Create_Log_Entry({
-                    body: {
-                        user_id: null,
-                        action: "Vendor Subscription Payment Succeeded for Subscription ID: " + subscriptionId,
-                        reference_id: subscriptionId,
-                    },
-                }, {
-                    status: () => ({ json: () => {} }),
-                })
+          await Create_Log_Entry({
+            body: {
+              user_id: null,
+              action: "Vendor Subscription Payment Succeeded for Subscription ID: " + subscriptionId,
+              reference_id: subscriptionId,
+            },
+          }, {
+            status: () => ({ json: () => { } }),
+          })
         }
         break;
       }

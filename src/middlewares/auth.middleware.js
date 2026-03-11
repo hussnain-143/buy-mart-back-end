@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import { apiError } from "../utils/apiError.js";
 import { getCache, setCache } from "../utils/redis.util.js";
 import { UserModel as User } from "../models/user.model.js";
-import { options } from "../constant.js";
+import { options, REDIS_KEY_USER_PREFIX } from "../constant.js";
 
 /**
  * @desc Core authentication logic
@@ -12,7 +12,7 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
   try {
     // 1. Get token from cookies (primary) or Authorization header (fallback)
     let token = req.cookies?.accessToken;
-    
+
     // If not in cookies, try Authorization header
     if (!token && req.headers.authorization) {
       const authHeader = req.headers.authorization;
@@ -20,7 +20,7 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
         token = authHeader.slice(7); // Remove "Bearer " prefix
       }
     }
-    
+
     if (!token) {
       console.error("❌ No token found in cookies or Authorization header");
       throw new apiError(401, "Not authorized, access token missing");
@@ -43,7 +43,7 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
     const userId = decoded.userId;
 
     // 3. Check Redis cache first
-    let user = await getCache(`user:${userId}`);
+    let user = await getCache(`${REDIS_KEY_USER_PREFIX}${userId}`);
     // let user = null; // Temporarily disable cache to avoid stale data issues
 
 
@@ -56,7 +56,7 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
       }
 
       // 5. Cache user in Redis for 5 hours
-      await setCache(`user:${userId}`, user, 60 * 60 * 5);
+      await setCache(`${REDIS_KEY_USER_PREFIX}${userId}`, user, 60 * 60 * 5);
     }
 
     // 6. Attach user to request object
@@ -82,6 +82,26 @@ const authenticate = async (req, next, ignoreExpiration = false) => {
  */
 export const authMiddleware = async (req, res, next) => {
   await authenticate(req, next, false);
+};
+
+/**
+ * @desc Admin only middleware
+ */
+export const isAdmin = async (req, res, next) => {
+  if (req.user?.role !== "admin") {
+    return next(new apiError(403, "Access denied. Admin role required."));
+  }
+  next();
+};
+
+/**
+ * @desc Vendor only middleware
+ */
+export const isVendor = async (req, res, next) => {
+  if (req.user?.role !== "vendor" && req.user?.role !== "admin") {
+    return next(new apiError(403, "Access denied. Vendor role required."));
+  }
+  next();
 };
 
 /**

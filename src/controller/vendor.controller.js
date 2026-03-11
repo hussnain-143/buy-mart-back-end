@@ -6,6 +6,7 @@ import { apiResponse } from "../utils/apiResponse.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 import { Create_Log_Entry } from "./log.controller.js";
 import { setCache, getCache, deleteCache } from "../utils/redis.util.js";
+import { REDIS_KEY_VENDORS_ALL, ACTIVITY_LOG_ACTIONS } from "../constant.js";
 
 /**
  * Create a new vendor
@@ -81,13 +82,13 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     await Create_Log_Entry({
       body: {
         user_id: req.user._id,
-        action: `Vendor Created with Shop Name: ${shop_name}`,
+        action: `${ACTIVITY_LOG_ACTIONS.VENDOR_CREATED} with Shop Name: ${shop_name}`,
         reference_id: newVendor._id,
       },
     });
 
     // Invalidate all vendors cache
-    await deleteCache("all_vendors");
+    await deleteCache(REDIS_KEY_VENDORS_ALL);
 
     return res.status(201).json(new apiResponse(201, "Vendor created successfully", newVendor));
   } catch (error) {
@@ -101,7 +102,7 @@ export const createVendor = asyncHandler(async (req, res, next) => {
  */
 export const getAllVendors = asyncHandler(async (req, res, next) => {
   try {
-    const cachedVendors = await getCache("all_vendors");
+    const cachedVendors = await getCache(REDIS_KEY_VENDORS_ALL);
     if (cachedVendors) {
       return res.status(200).json(new apiResponse(200, "Vendors retrieved successfully", cachedVendors));
     }
@@ -112,7 +113,7 @@ export const getAllVendors = asyncHandler(async (req, res, next) => {
       .exec();
 
     // Cache for 5 hours
-    await setCache("all_vendors", vendors, 60 * 60 * 5);
+    await setCache(REDIS_KEY_VENDORS_ALL, vendors, 60 * 60 * 5);
 
     return res.status(200).json(new apiResponse(200, "Vendors retrieved successfully", vendors));
   } catch (error) {
@@ -145,13 +146,13 @@ export const approveVendor = asyncHandler(async (req, res, next) => {
     await vendor.save();
 
     // Invalidate all vendors cache
-    await deleteCache("all_vendors");
+    await deleteCache(REDIS_KEY_VENDORS_ALL);
 
     // Log vendor approval
     await Create_Log_Entry({
       body: {
         user_id: req.user._id,
-        action: `Vendor Approved for Shop Name: ${vendor.shop_name}`,
+        action: `${ACTIVITY_LOG_ACTIONS.VENDOR_APPROVED} for Shop Name: ${vendor.shop_name}`,
         reference_id: vendor._id,
       },
     });
@@ -168,7 +169,7 @@ export const approveVendor = asyncHandler(async (req, res, next) => {
  */
 export const getVendorStripeId = asyncHandler(async (req, res, next) => {
   try {
-    const vendor = await VendorModel.findOne({ owner: req.user._id , is_active : true });
+    const vendor = await VendorModel.findOne({ owner: req.user._id, is_active: true });
     if (!vendor) {
       return next(new apiError(404, "Vendor not found"));
     }
@@ -206,4 +207,40 @@ export const setVendorStripeId = asyncHandler(async (req, res, next) => {
     .json(
       new apiResponse(200, "Stripe Vendor ID updated successfully", updatedVendor)
     );
+});
+
+/**
+ * Toggle Vendor Status (Admin Only)
+ */
+export const toggleVendorStatus = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const vendor = await VendorModel.findById(id).populate('owner');
+    if (!vendor) {
+      return next(new apiError(404, "Vendor not found"));
+    }
+
+    vendor.is_active = !vendor.is_active;
+    await vendor.save();
+
+    // Invalidate all vendors cache
+    await deleteCache(REDIS_KEY_VENDORS_ALL);
+
+    // Activity Log
+    await Create_Log_Entry({
+      body: {
+        user_id: req.user._id,
+        action: `${ACTIVITY_LOG_ACTIONS.VENDOR_APPROVED}: Status toggled to ${vendor.is_active ? 'Active' : 'Blocked'} for ${vendor.shop_name}`,
+        reference_id: vendor._id,
+      },
+    });
+
+    return res.status(200).json(
+      new apiResponse(200, `Vendor ${vendor.is_active ? 'activated' : 'blocked'} successfully`, vendor)
+    );
+  } catch (error) {
+    console.error("❌ Toggle vendor status error:", error);
+    next(error);
+  }
 });

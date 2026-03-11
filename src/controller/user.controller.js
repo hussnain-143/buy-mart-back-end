@@ -3,7 +3,7 @@ import { UserModel as User } from "../models/user.model.js";
 import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { options } from "../constant.js";
+import { options, REDIS_KEY_USER_PREFIX, ACTIVITY_LOG_ACTIONS } from "../constant.js";
 import { setCache, deleteCache } from "../utils/redis.util.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 
@@ -37,7 +37,7 @@ const generateAccessAndRefreshTokens = async (id) => {
 ===================================================== */
 export const Signup_User = asyncHandler(async (req, res) => {
 
-  const { firstName, lastName, userName, email, password, role , city , street , houseNo } = req.body;
+  const { firstName, lastName, userName, email, password, role, city, street, houseNo } = req.body;
 
   if (!firstName || !lastName || !userName || !email || !password || !role || !city || !street || !houseNo) {
     throw new apiError(400, "All required fields must be provided");
@@ -94,19 +94,17 @@ export const Signup_User = asyncHandler(async (req, res) => {
     await Create_Log_Entry({
       body: {
         user_id: createdUser._id,
-        action: "User Registration  with Username: " + createdUser.userName,
+        action: `${ACTIVITY_LOG_ACTIONS.USER_REGISTRATION} with Username: ${createdUser.userName}`,
         reference_id: null,
       },
     }, {
-      status: () => ({ json: () => {} }),
+      status: () => ({ json: () => { } }),
     });
   }
 
-  return res.status(201).json({
-    status: 201,
-    message: "User registered successfully",
-    data: { user: createdUser },
-  });
+  return res.status(201).json(
+    new apiResponse(201, "User registered successfully", { user: createdUser })
+  );
 });
 
 /* =====================================================
@@ -129,17 +127,17 @@ export const Login_User = asyncHandler(async (req, res) => {
     await generateAccessAndRefreshTokens(user._id);
 
   const tempUser = await User.findById(user._id)
-  .select("-password -refreshToken")
-  .lean();
+    .select("-password -refreshToken")
+    .lean();
 
   const vendor_sub = await VendorSubscriptionModel.findOne({
     user: user._id,
   }).populate('vendor').lean();
 
-  const loginUser  = { ...tempUser, vendor_subscription: vendor_sub };
+  const loginUser = { ...tempUser, vendor_subscription: vendor_sub };
 
   // Cache user for 5 hours
-  await setCache(`user:${user._id}`, loginUser, 60 * 60 * 5);
+  await setCache(`${REDIS_KEY_USER_PREFIX}${user._id}`, loginUser, 60 * 60 * 5);
 
   return res
     .status(200)
@@ -214,7 +212,7 @@ export const Refresh_Access_Token = asyncHandler(async (req, res) => {
     if (decoded.exp) {
       const tokenAge = Math.floor(Date.now() / 1000) - decoded.exp;
       const maxAllowedAge = 60 * 60 * 24 * 30; // 30 days in seconds
-      
+
       if (tokenAge > maxAllowedAge) {
         console.error("❌ Refresh token too old:", tokenAge, "seconds");
         throw new apiError(401, "Refresh token has expired");
@@ -239,7 +237,7 @@ export const Refresh_Access_Token = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     console.error("❌ Token refresh error:", error.message);
-    
+
     if (error.message === "Refresh token has expired") {
       throw error; // Re-throw our custom error
     }
@@ -249,7 +247,7 @@ export const Refresh_Access_Token = asyncHandler(async (req, res) => {
     if (error.isApiError) {
       throw error; // Re-throw API errors
     }
-    
+
     throw new apiError(401, "Failed to refresh token");
   }
 });
@@ -272,7 +270,7 @@ export const Logout_User = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   // Remove user from Redis cache
-  await deleteCache(`user:${userId}`);
+  await deleteCache(`${REDIS_KEY_USER_PREFIX}${userId}`);
 
   // Clear cookies
   res.clearCookie("accessToken");
@@ -314,11 +312,11 @@ export const Update_Profile = asyncHandler(async (req, res) => {
   await Create_Log_Entry({
     body: {
       user_id: req.user._id,
-      action: "User Profile Updated for Username: " + updatedUser.userName,
+      action: `${ACTIVITY_LOG_ACTIONS.USER_PROFILE_UPDATED} for Username: ${updatedUser.userName}`,
       reference_id: null,
     },
   }, {
-    status: () => ({ json: () => {} }),
+    status: () => ({ json: () => { } }),
   });
 
   return res.status(200).json(
@@ -353,12 +351,12 @@ export const Update_Address = asyncHandler(async (req, res) => {
   await Create_Log_Entry({
     body: {
       user_id: req.user._id,
-      action: "User Address Updated for Username: " + updatedUser.userName,
+      action: `${ACTIVITY_LOG_ACTIONS.USER_ADDRESS_UPDATED} for Username: ${updatedUser.userName}`,
       reference_id: null,
     },
   }, {
-    status: () => ({ json: () => {} }),
-  }); 
+    status: () => ({ json: () => { } }),
+  });
 
   return res.status(200).json(
     new apiResponse(200, "Address updated successfully", {
@@ -388,21 +386,21 @@ export const Update_Password = asyncHandler(async (req, res) => {
   await user.save();
 
   // Remove cached user (force re-login)
-  await deleteCache(`user:${req.user._id}`);
+  await deleteCache(`${REDIS_KEY_USER_PREFIX}${req.user._id}`);
 
   // Clear cookies
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken");
-  
+
   // Create log entry for password update
   await Create_Log_Entry({
     body: {
       user_id: req.user._id,
-      action: "User Password Updated for Username: " + user.userName,
+      action: `${ACTIVITY_LOG_ACTIONS.USER_PASSWORD_UPDATED} for Username: ${user.userName}`,
       reference_id: null,
     },
   }, {
-    status: () => ({ json: () => {} }),
+    status: () => ({ json: () => { } }),
   });
 
   return res.status(200).json(
@@ -410,5 +408,55 @@ export const Update_Password = asyncHandler(async (req, res) => {
       200,
       "Password updated successfully. Please login again."
     )
+  );
+});
+
+/* =====================================================
+   GET ALL USERS (Admin Only)
+===================================================== */
+export const Get_All_Users = asyncHandler(async (req, res) => {
+  const users = await User.find().select("-password -refreshToken").sort({ createdAt: -1 });
+  return res.status(200).json(
+    new apiResponse(200, "All users fetched successfully", { users })
+  );
+});
+
+/* =====================================================
+   TOGGLE USER STATUS (Admin Only)
+===================================================== */
+export const Toggle_User_Status = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const user = await User.findById(id);
+  if (!user) {
+    throw new apiError(404, "User not found");
+  }
+
+  // Toggle status (assuming isActive field exists, defaulting to true if undefined)
+  user.isActive = user.isActive === false ? true : false;
+  await user.save({ validateBeforeSave: false }); // Skip validation for status change
+
+  // Clear user cache to force logout or data refresh
+  await deleteCache(`${REDIS_KEY_USER_PREFIX}${user._id}`);
+
+  // If blocked, also clear refresh token to force re-login if unblocked later
+  if (!user.isActive) {
+    user.refreshToken = null;
+    await user.save({ validateBeforeSave: false });
+  }
+
+  // Activity Log
+  await Create_Log_Entry({
+    body: {
+      user_id: req.user._id,
+      action: `${ACTIVITY_LOG_ACTIONS.USER_PROFILE_UPDATED}: Status toggled to ${user.isActive ? 'Active' : 'Blocked'} for ${user.userName}`,
+      reference_id: user._id,
+    },
+  }, {
+    status: () => ({ json: () => { } }),
+  });
+
+  return res.status(200).json(
+    new apiResponse(200, `User ${user.isActive ? 'activated' : 'blocked'} successfully`, { user })
   );
 });

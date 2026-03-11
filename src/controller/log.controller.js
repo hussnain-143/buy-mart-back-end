@@ -28,7 +28,9 @@ export const Create_Log_Entry = asyncHandler(async (req, res) => {
 
     logInfo(`Log entry created for user: ${user_id}, action: ${action}`);
 
-    return new apiResponse(res, 201, "Log entry created successfully", logEntry);
+    return res.status(201).json(
+        new apiResponse(201, "Log entry created successfully", logEntry)
+    );
 });
 
 /* =====================================================
@@ -37,7 +39,9 @@ export const Create_Log_Entry = asyncHandler(async (req, res) => {
 export const Get_Log_Entries = asyncHandler(async (req, res) => {
     const logs = await Log.find().populate("user_id", "userName email firstName lastName").sort({ createdAt: -1 });
 
-    return new apiResponse(res, 200, "Log entries retrieved successfully", logs);
+    return res.status(200).json(
+        new apiResponse(200, "Log entries retrieved successfully", logs)
+    );
 });
 
 /* =====================================================
@@ -73,14 +77,16 @@ export const Get_User_Activity_Logs = asyncHandler(async (req, res) => {
     // Get total count for pagination
     const totalLogs = await Log.countDocuments(query);
 
-    return new apiResponse(res, 200, "User activity logs retrieved successfully", {
-        logs,
-        pagination: {
-            currentPage: page,
-            totalPages: Math.ceil(totalLogs / limit),
-            totalLogs,
-            hasNextPage: page < Math.ceil(totalLogs / limit),
-            hasPrevPage: page > 1,
-        },
-    });
+    return res.status(200).json(
+        new apiResponse(200, "User activity logs retrieved successfully", {
+            logs,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalLogs / limit),
+                totalLogs,
+                hasNextPage: page < Math.ceil(totalLogs / limit),
+                hasPrevPage: page > 1,
+            },
+        })
+    );
 });

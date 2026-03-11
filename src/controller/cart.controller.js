@@ -1,96 +1,142 @@
-// add item to cart
+import { CartModel as Cart } from "../models/cartCollection.model.js";
+import { apiError } from "../utils/apiError.js";
+import { apiResponse } from "../utils/apiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { getCache, setCache, deleteCache } from "../utils/redis.util.js";
+import { REDIS_KEY_USER_CART_PREFIX } from "../constant.js";
+
+// Helper to clear cart cache
+const clearCartCache = async (userId) => {
+  await deleteCache(`${REDIS_KEY_USER_CART_PREFIX}${userId}`);
+};
+
+/* =====================================================
+   ADD TO CART
+===================================================== */
 export const addToCart = asyncHandler(async (req, res) => {
+  const { product_id, quantity = 1 } = req.body;
+  const userId = req.user._id || req.user.id;
 
-  // 1. Validate inputs
-  //    - productId
-  //    - quantity (default = 1)
+  if (!product_id) {
+    throw new apiError(400, "Product ID is required");
+  }
 
-  // 2. Get user ID from req.user
+  let cartItem = await Cart.findOne({ user_id: userId, product_id });
 
-  // 3. Check if cart exists for user
-  //    - if not, create new cart
+  if (cartItem) {
+    cartItem.quantity += parseInt(quantity);
+    await cartItem.save();
+  } else {
+    cartItem = new Cart({
+      user_id: userId,
+      product_id,
+      quantity: parseInt(quantity),
+    });
+    await cartItem.save();
+  }
 
-  // 4. Check if product already exists in cart
-  //    - if yes, increase quantity
-  //    - if no, add new item
+  await clearCartCache(userId);
 
-  // 5. Recalculate cart totals
-  //    - item subtotal
-  //    - cart total amount
-
-  // 6. Save cart
-
-  // 7. Send success response
+  return res.status(200).json(
+    new apiResponse(200, "Item added to cart", cartItem)
+  );
 });
 
-
-// update cart item quantity
-export const updateCartItem = asyncHandler(async (req, res) => {
-
-  // 1. Validate inputs
-  //    - cartItemId
-  //    - quantity (must be >= 1)
-
-  // 2. Find user's cart
-
-  // 3. Find cart item
-  //    - if not found, return error
-
-  // 4. Update item quantity
-
-  // 5. Recalculate cart totals
-
-  // 6. Save cart
-
-  // 7. Send response
-});
-
-
-// remove item from cart
-export const removeFromCart = asyncHandler(async (req, res) => {
-
-  // 1. Get cart item ID from params
-
-  // 2. Find user's cart
-
-  // 3. Remove item from cart items array
-
-  // 4. Recalculate cart totals
-
-  // 5. Save cart
-
-  // 6. Send success response
-});
-
-
-// get user cart
+/* =====================================================
+   GET CART
+===================================================== */
 export const getCart = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const cacheKey = `${REDIS_KEY_USER_CART_PREFIX}${userId}`;
 
-  // 1. Get user ID from req.user
+  // Try Cache
+  const cachedCart = await getCache(cacheKey);
+  if (cachedCart) {
+    return res.status(200).json(
+      new apiResponse(200, "Cart retrieved successfully (from cache)", cachedCart)
+    );
+  }
 
-  // 2. Find cart by user
+  const cartItems = await Cart.find({ user_id: userId }).populate({
+    path: "product_id",
+    populate: ["brand_id", "category_id", "images_id"]
+  });
 
-  // 3. Populate product details
-  //    - name
-  //    - price
-  //    - image
+  // Set Cache
+  await setCache(cacheKey, cartItems);
 
-  // 4. Calculate totals if needed
-
-  // 5. Send cart response
+  return res.status(200).json(
+    new apiResponse(200, "Cart retrieved successfully", cartItems)
+  );
 });
 
+/* =====================================================
+   UPDATE CART ITEM
+===================================================== */
+export const updateCartItem = asyncHandler(async (req, res) => {
+  const { id } = req.params; // cart item id
+  const { quantity } = req.body;
+  const userId = req.user._id || req.user.id;
 
-// clear cart
+  if (quantity < 1) {
+    throw new apiError(400, "Quantity must be at least 1");
+  }
+
+  const cartItem = await Cart.findById(id);
+  if (!cartItem) {
+    throw new apiError(404, "Cart item not found");
+  }
+
+  if (cartItem.user_id.toString() !== userId.toString()) {
+    throw new apiError(403, "Unauthorized to update this cart item");
+  }
+
+  cartItem.quantity = parseInt(quantity);
+  await cartItem.save();
+
+  await clearCartCache(userId);
+
+  return res.status(200).json(
+    new apiResponse(200, "Cart item updated", cartItem)
+  );
+});
+
+/* =====================================================
+   REMOVE FROM CART
+===================================================== */
+export const removeFromCart = asyncHandler(async (req, res) => {
+  const { id } = req.params; // cart item id
+  const userId = req.user._id || req.user.id;
+
+  const cartItem = await Cart.findById(id);
+  if (!cartItem) {
+    throw new apiError(404, "Cart item not found");
+  }
+
+  if (cartItem.user_id.toString() !== userId.toString()) {
+    throw new apiError(403, "Unauthorized to remove this cart item");
+  }
+
+  await Cart.findByIdAndDelete(id);
+
+  await clearCartCache(userId);
+
+  return res.status(200).json(
+    new apiResponse(200, "Item removed from cart")
+  );
+});
+
+/* =====================================================
+   CLEAR CART
+===================================================== */
 export const clearCart = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
 
-  // 1. Find user's cart
+  await Cart.deleteMany({ user_id: userId });
 
-  // 2. Remove all items
+  await clearCartCache(userId);
 
-  // 3. Reset totals
-
-  // 4. Save empty cart
-
-  // 5. Send success response
+  return res.status(200).json(
+    new apiResponse(200, "Cart cleared successfully")
+  );
 });

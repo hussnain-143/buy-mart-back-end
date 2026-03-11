@@ -1,55 +1,166 @@
+import { CategoryModel as Category } from "../models/category.model.js";
+import { apiError } from "../utils/apiError.js";
+import { apiResponse } from "../utils/apiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { Create_Log_Entry } from "./log.controller.js";
+import { getCache, setCache, deleteCache } from "../utils/redis.util.js";
+import {
+  REDIS_KEY_CATEGORIES_ALL,
+  ACTIVITY_LOG_ACTIONS
+} from "../constant.js";
 
+// Helper to clear category caches
+const clearCategoryCaches = async () => {
+  await deleteCache(REDIS_KEY_CATEGORIES_ALL);
+};
 
-// add brand
-export const addBrand = asyncHandler(async (req, res) => {
+/* =====================================================
+   ADD CATEGORY
+===================================================== */
+export const addCategory = asyncHandler(async (req, res) => {
+  const { name, parent_id } = req.body;
+  const userId = req.user._id || req.user.id;
 
-  // 1. Validate inputs
-  //    - check brand name
-  //    - check logo file existsx
-  // 2. Check if brand already exists
-  //    - prevent duplicate brand names
+  if (!name) {
+    throw new apiError(400, "Category name is required");
+  }
 
-  // 4. Save brand
-  //    - store name
-  //    - store logo URL
-  //    - link brand with vendor (req.user)
+  const existingCategory = await Category.findOne({ name: name.trim() });
+  if (existingCategory) {
+    throw new apiError(400, "Category with this name already exists");
+  }
 
-  // 5. Send success response
+  const newCategory = new Category({
+    name: name.trim(),
+    parent_id: parent_id || null,
+    user_id: userId,
+  });
+
+  await newCategory.save();
+
+  // Clear Cache
+  await clearCategoryCaches();
+
+  // Activity Log
+  await Create_Log_Entry({
+    body: {
+      user_id: userId,
+      action: `${ACTIVITY_LOG_ACTIONS.CATEGORY_CREATED}: ${newCategory.name}`,
+      reference_id: newCategory._id,
+    },
+  }, {
+    status: () => ({ json: () => { } }),
+  });
+
+  return res.status(201).json(
+    new apiResponse(201, "Category added successfully", newCategory)
+  );
 });
 
+/* =====================================================
+   GET ALL CATEGORIES (with Caching)
+===================================================== */
+export const getAllCategories = asyncHandler(async (req, res) => {
+  // Try to get from Cache
+  const cachedCategories = await getCache(REDIS_KEY_CATEGORIES_ALL);
+  if (cachedCategories) {
+    console.log("CACHE HIT: All Categories retrieved from Redis");
+    return res.status(200).json(
+      new apiResponse(200, "Categories retrieved successfully (from cache)", cachedCategories)
+    );
+  }
 
-// update brand (set active / non-active)
-export const updateBrandStatus = asyncHandler(async (req, res) => {
+  // Get from DB
+  const categories = await Category.find({ isActive: true }).sort({ name: 1 });
 
-  // 1. Get brand ID from params
+  // Set Cache
+  await setCache(REDIS_KEY_CATEGORIES_ALL, categories);
 
-  // 2. Find brand in database
-  //    - if not found, return error
-
-  // 3. Verify vendor ownership or admin access
-
-  // 4. Toggle isActive status
-  //    - active → inactive
-  //    - inactive → active
-
-  // 5. Save updated brand
-
-  // 6. Send response
+  console.log("CACHE MISS: All Categories retrieved from DB");
+  return res.status(200).json(
+    new apiResponse(200, "Categories retrieved successfully", categories)
+  );
 });
 
+/* =====================================================
+   GET ADMIN CATEGORIES (All)
+===================================================== */
+export const getAdminCategories = asyncHandler(async (req, res) => {
+  const categories = await Category.find().sort({ name: 1 });
+  return res.status(200).json(
+    new apiResponse(200, "All Categories retrieved successfully", categories)
+  );
+});
 
-// delete brand
-export const deleteBrand = asyncHandler(async (req, res) => {
+/* =====================================================
+   UPDATE CATEGORY
+===================================================== */
+export const updateCategory = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { name, parent_id, isActive, is_approved } = req.body;
+  const userId = req.user._id || req.user.id;
 
-  // 1. Get brand ID from params
+  const category = await Category.findById(id);
+  if (!category) {
+    throw new apiError(404, "Category not found");
+  }
 
-  // 2. Find brand in database
-  //    - if not found, return error
+  if (name) category.name = name.trim();
+  if (parent_id !== undefined) category.parent_id = parent_id || null;
+  if (isActive !== undefined) category.isActive = isActive;
+  if (is_approved !== undefined && req.user.role === 'admin') category.is_approved = is_approved;
 
-  // 3. Verify vendor ownership or admin access
+  await category.save();
 
-  // 4. Delete brand from database
-  //    - optional: also delete logo from cloud storage
+  // Clear Cache
+  await clearCategoryCaches();
 
-  // 5. Send success response
+  // Activity Log
+  await Create_Log_Entry({
+    body: {
+      user_id: userId,
+      action: `${ACTIVITY_LOG_ACTIONS.CATEGORY_UPDATED}: ${category.name}`,
+      reference_id: category._id,
+    },
+  }, {
+    status: () => ({ json: () => { } }),
+  });
+
+  return res.status(200).json(
+    new apiResponse(200, "Category updated successfully", category)
+  );
+});
+
+/* =====================================================
+   DELETE CATEGORY
+===================================================== */
+export const deleteCategory = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user._id || req.user.id;
+
+  const category = await Category.findById(id);
+  if (!category) {
+    throw new apiError(404, "Category not found");
+  }
+
+  const categoryName = category.name;
+  await Category.findByIdAndDelete(id);
+
+  // Clear Cache
+  await clearCategoryCaches();
+
+  // Activity Log
+  await Create_Log_Entry({
+    body: {
+      user_id: userId,
+      action: `${ACTIVITY_LOG_ACTIONS.CATEGORY_DELETED}: ${categoryName}`,
+      reference_id: null,
+    },
+  }, {
+    status: () => ({ json: () => { } }),
+  });
+
+  return res.status(200).json(
+    new apiResponse(200, "Category deleted successfully")
+  );
 });

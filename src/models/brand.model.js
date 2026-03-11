@@ -19,12 +19,6 @@ const BrandSchema = new Schema(
       index: true,
     },
 
-    logo: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
     user_id: {
       type: Schema.Types.ObjectId,
       ref: "User",
