@@ -30,14 +30,13 @@ imageSchema.index(
 );
 
 // AUTO-SWITCH logic (App-level)
-imageSchema.pre("save", async function (next) {
+imageSchema.pre("save", async function () {
   if (this.isPrimary) {
     await this.constructor.updateMany(
       { product_id: this.product_id, _id: { $ne: this._id } },
       { $set: { isPrimary: false } }
     );
   }
-  next();
 });
 
 export const ImageModel = model("Image", imageSchema);

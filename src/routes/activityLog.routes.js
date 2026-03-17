@@ -9,7 +9,8 @@ export const activityLogRoutes = express.Router();
  * - Requires authentication
  * - Returns paginated activity logs for the logged-in user
  */
-activityLogRoutes.get("/me", authMiddleware, Get_User_Activity_Logs);
+activityLogRoutes.get("/", authMiddleware, Get_Log_Entries);
+activityLogRoutes.get("/user", authMiddleware, Get_User_Activity_Logs);
 
 /**
  * Get activity logs for a specific user (by user ID)

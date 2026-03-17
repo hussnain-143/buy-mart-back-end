@@ -2,6 +2,8 @@ import { stripe } from "../utils/stripe.js";
 import { createSubscription, updateSubscriptionStatus } from "../service/vendorSubscription.service.js";
 import { VendorModel } from "../models/vendor.model.js";
 import { VendorSubscriptionModel } from "../models/vendor_subscription.model.js";
+import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -66,15 +68,7 @@ export const handleStripeWebhook = async (req, res) => {
               vendor.stripe_customer_id = customerId;
               await vendor.save();
 
-              await Create_Log_Entry({
-                    body: {
-                      user_id: userId,
-                      action: "Vendor Subscription Created for User: " + vendor.userName,
-                      reference_id: subscription._id,
-                    },
-                  }, {
-                    status: () => ({ json: () => {} }),
-                  });
+              await createLog(userId, "Vendor Subscription Created for User ID: " + userId, subscription._id);
             }
           } else {
             // Update existing
@@ -84,20 +78,68 @@ export const handleStripeWebhook = async (req, res) => {
             subscription.end_date = endDate;
             await subscription.save();
 
-            await Create_Log_Entry({
-                  body: {
-                    user_id: userId,
-                    action: "Vendor Subscription Updated for User: " + (vendor ? vendor.userName : "Unknown"),
-                    reference_id: subscription._id,
-                  },
-                }, {
-                  status: () => ({ json: () => {} }),
+            await createLog(userId, "Vendor Subscription Updated for User ID: " + userId, subscription._id);
+          }
+        } else if (session.mode === "payment" && session.metadata?.type === "product") {
+          const userId = session.metadata.userId;
+          const sessionId = session.id;
+
+          // Check if order already exists
+          const { OrderModel: Order } = await import("../models/orders.model.js");
+          const { OrderItemModel: OrderItem } = await import("../models/order_items.model.js");
+          const { CartModel: Cart } = await import("../models/cartCollection.model.js");
+          const { ProductModel: Product } = await import("../models/product.model.js");
+
+          let order = await Order.findOne({ stripe_session_id: sessionId });
+
+          if (!order) {
+            console.log("🛒 Creating order from webhook for session:", sessionId);
+            
+            // Get user cart items
+            const cartItems = await Cart.find({ user_id: userId }).populate("product_id");
+            
+            if (cartItems.length > 0) {
+              // Create Order
+              order = await Order.create({
+                user_id: userId,
+                shipping_address: session.metadata.shippingAddress || "Stripe Checkout Address",
+                payment_method: "card",
+                status: "processing",
+                payment_status: "paid",
+                stripe_session_id: sessionId,
+                total_amount: session.amount_total / 100
+              });
+
+              // Create Order Items
+              for (const item of cartItems) {
+                if (!item.product_id) continue;
+                
+                const unitPrice = item.product_id.discount_price > 0 ? item.product_id.discount_price : item.product_id.price;
+                
+                await OrderItem.create({
+                  order_id: order._id,
+                  product_id: item.product_id._id,
+                  quantity: item.quantity,
+                  unit_price: unitPrice,
+                  total_price: unitPrice * item.quantity
                 });
+
+                // Update stock
+                await Product.findByIdAndUpdate(item.product_id._id, {
+                  $inc: { stock_quantity: -item.quantity }
+                });
+              }
+
+              // Clear Cart
+              await Cart.deleteMany({ user_id: userId });
+
+              await createLog(userId, `Order Created & Paid via Webhook: Order ID ${order._id}`, order._id);
+            }
           }
         }
 
-        
-        
+
+
         break;
       }
 
@@ -107,15 +149,7 @@ export const handleStripeWebhook = async (req, res) => {
           { stripe_subscription_id: subscription.id },
           { status: "canceled", is_active: false }
         );
-        await Create_Log_Entry({
-              body: {
-                user_id: null,
-                action: "Vendor Subscription Canceled for Subscription ID: " + subscription.id,
-                reference_id: subscription.id,
-              },
-            }, {
-              status: () => ({ json: () => {} }),
-            })
+        await createLog(null, "Vendor Subscription Canceled for Subscription ID: " + subscription.id, subscription.id);
         break;
       }
 
@@ -136,15 +170,7 @@ export const handleStripeWebhook = async (req, res) => {
               end_date: currentPeriodEnd
             }
           );
-            await Create_Log_Entry({
-                    body: {
-                        user_id: null,
-                        action: "Vendor Subscription Payment Succeeded for Subscription ID: " + subscriptionId,
-                        reference_id: subscriptionId,
-                    },
-                }, {
-                    status: () => ({ json: () => {} }),
-                })
+          await createLog(null, "Vendor Subscription Payment Succeeded for Subscription ID: " + subscriptionId, subscriptionId);
         }
         break;
       }

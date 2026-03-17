@@ -1,5 +1,5 @@
 import { model, Schema } from "mongoose";
-import { OrderItemModel } from "./order_items.model";
+import { OrderItemModel } from "./order_items.model.js";
 
 const OrderSchema = new Schema(
   {
@@ -42,6 +42,11 @@ const OrderSchema = new Schema(
       type: String,
       enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
+    },
+    stripe_session_id: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
   },
   { timestamps: true }

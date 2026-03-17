@@ -1,16 +1,18 @@
 import express from "express";
 import {
-  Signup_User,
-  Login_User,
-  Logout_User,
-  Get_User,
-  Update_Profile,
-  Update_Password,
-  Update_Address,
-  Refresh_Access_Token,
+   Signup_User,
+   Login_User,
+   Logout_User,
+   Get_User,
+   Update_Profile,
+   Update_Password,
+   Update_Address,
+   Refresh_Access_Token,
+   Get_All_Users,
+   Toggle_User_Status,
 } from "../controller/user.controller.js";
 
-import { authMiddleware, logoutMiddleware } from "../middlewares/auth.middleware.js";
+import { authMiddleware, logoutMiddleware, isAdmin } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 // Create router for all user-related APIs
@@ -76,3 +78,13 @@ userRoutes.put("/update-password", authMiddleware, Update_Password);
  * - Updates shipping / billing address
  */
 userRoutes.put("/update-address", authMiddleware, Update_Address);
+
+/**
+ * Get all users (Admin only)
+ */
+userRoutes.get("/all", authMiddleware, isAdmin, Get_All_Users);
+
+/**
+ * Toggle user status (Block/Unblock) (Admin only)
+ */
+userRoutes.patch("/admin/:id/toggle-status", authMiddleware, isAdmin, Toggle_User_Status);

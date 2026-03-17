@@ -8,28 +8,27 @@ import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { logInfo } from "../service/log.services.js";
 
+import { createLog } from "../service/log.services.js";
+
 /* =====================================================
-   CREATE LOG ENTRY
+   CREATE LOG ENTRY (Controller for API usage if needed)
 ===================================================== */
-export const Create_Log_Entry = asyncHandler(async (req, res) => {
+export const Create_Log_Entry_API = asyncHandler(async (req, res) => {
     const { user_id, action, reference_id } = req.body;
 
     if (!user_id || !action) {
         throw new apiError(400, "User ID and action are required");
     }
 
-    const logEntry = new Log({
-        user_id,
-        action,
-        reference_id: reference_id || null,
-    });
+    const logEntry = await createLog(user_id, action, reference_id);
 
-    await logEntry.save();
-
-    logInfo(`Log entry created for user: ${user_id}, action: ${action}`);
-
-    return new apiResponse(res, 201, "Log entry created successfully", logEntry);
+    return res.status(201).json(
+        new apiResponse(201, "Log entry created successfully", logEntry)
+    );
 });
+
+// For backward compatibility while I update other files
+export const Create_Log_Entry = Create_Log_Entry_API;
 
 /* =====================================================
    GET ALL LOG ENTRIES (Admin)
@@ -37,7 +36,9 @@ export const Create_Log_Entry = asyncHandler(async (req, res) => {
 export const Get_Log_Entries = asyncHandler(async (req, res) => {
     const logs = await Log.find().populate("user_id", "userName email firstName lastName").sort({ createdAt: -1 });
 
-    return new apiResponse(res, 200, "Log entries retrieved successfully", logs);
+    return res.status(200).json(
+        new apiResponse(200, "Log entries retrieved successfully", logs)
+    );
 });
 
 /* =====================================================
@@ -73,14 +74,16 @@ export const Get_User_Activity_Logs = asyncHandler(async (req, res) => {
     // Get total count for pagination
     const totalLogs = await Log.countDocuments(query);
 
-    return new apiResponse(res, 200, "User activity logs retrieved successfully", {
-        logs,
-        pagination: {
-            currentPage: page,
-            totalPages: Math.ceil(totalLogs / limit),
-            totalLogs,
-            hasNextPage: page < Math.ceil(totalLogs / limit),
-            hasPrevPage: page > 1,
-        },
-    });
+    return res.status(200).json(
+        new apiResponse(200, "User activity logs retrieved successfully", {
+            logs,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalLogs / limit),
+                totalLogs,
+                hasNextPage: page < Math.ceil(totalLogs / limit),
+                hasPrevPage: page > 1,
+            },
+        })
+    );
 });

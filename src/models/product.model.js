@@ -64,7 +64,7 @@ const ProductSchema = new Schema(
     images_id: [
       {
         type: Schema.Types.ObjectId,
-        ref: "Media", // or "Image" based on your design
+        ref: "Image", // Matches the registered model name
       }
     ],
 
@@ -84,5 +84,6 @@ ProductSchema.index({ name: "text", desc: "text" });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ category_id: 1 });
 ProductSchema.index({ brand_id: 1 });
+// ProductSchema.index({ sku: 1 }); // Redundant (unique: true handles this)
 
 export const ProductModel = model("Product", ProductSchema);
