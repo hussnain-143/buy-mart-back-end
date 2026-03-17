@@ -133,7 +133,12 @@ export const getVendorStats = asyncHandler(async (req, res) => {
         );
     }
 
-    const vendorProducts = await Product.find({ vendor_id: vendorId }).select("_id");
+    const vendorProducts = await Product.find({ 
+        $or: [
+            { vendor_id: vendorId },
+            { vendor_id: req.user._id }
+        ]
+    }).select("_id");
     const productIds = vendorProducts.map(p => p._id);
 
     const totalProducts = productIds.length;
@@ -186,6 +191,13 @@ export const getVendorStats = asyncHandler(async (req, res) => {
         { $sort: { "_id.year": 1, "_id.month": 1 } }
     ]);
 
+    // Format trends for frontend (optional but good for consistency)
+    const formattedTrends = revenueTrends.map(item => ({
+        _id: item._id,
+        revenue: item.revenue || 0,
+        orders: item.orders || 0
+    }));
+
     // Top Selling Products for this Vendor
     const topProducts = await OrderItem.aggregate([
         {
@@ -237,7 +249,7 @@ export const getVendorStats = asyncHandler(async (req, res) => {
             totalProducts,
             totalOrders,
             totalRevenue,
-            revenueTrends,
+            revenueTrends: formattedTrends,
             topProducts,
             recentLogs
         })
