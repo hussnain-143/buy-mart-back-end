@@ -208,11 +208,26 @@ const getAdminProducts = asyncHandler(async (req, res) => {
 
 // Get Vendor Products
 const getVendorProducts = asyncHandler(async (req, res) => {
-    const vendorId = req.user.vendor_id || (await Vendor.findOne({ owner: req.user._id }))?._id;
+    console.log("=== GET VENDOR PRODUCTS ===");
+    console.log("req.user._id:", req.user._id);
+    console.log("req.user.vendor_id:", req.user.vendor_id);
+    
+    // First try the vendor_id from the user object, otherwise look up the Vendor model
+    let vendorId = req.user.vendor_id;
+    
+    if (!vendorId) {
+        const vendorProfile = await Vendor.findOne({ owner: req.user._id });
+        console.log("vendorProfile lookup result:", vendorProfile);
+        vendorId = vendorProfile?._id;
+    }
+
+    console.log("Final resolved vendorId:", vendorId);
+
     if (!vendorId) {
         throw new apiError(404, "Vendor profile not found");
     }
     const products = await Product.find({ vendor_id: vendorId }).populate(["category_id", "brand_id", "images_id"]).sort("-createdAt");
+    console.log("Found products count:", products.length);
     return res.status(200).json(new apiResponse(200, "Vendor products fetched successfully", products));
 });
 
