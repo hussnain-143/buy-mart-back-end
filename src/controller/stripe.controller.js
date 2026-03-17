@@ -2,6 +2,7 @@ import { stripe } from "../utils/stripe.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { apiError } from "../utils/apiError.js";
+import { syncSubscriptionFromStripe } from "../service/vendorSubscription.service.js";
 
 /**
  * Create Stripe checkout session for vendor subscription
@@ -146,6 +147,20 @@ export const verifySession = asyncHandler(async (req, res, next) => {
       return next(new apiError(400, "Payment not completed"));
     }
 
+    // Sync subscription to database immediately to avoid race conditions with webhook
+    let subscription = null;
+    if (session.mode === "subscription") {
+        try {
+            subscription = await syncSubscriptionFromStripe({
+                sessionId: session.id,
+                userId: session.metadata?.userId
+            });
+        } catch (syncError) {
+            console.error("⚠️ Background sync failed during verification:", syncError.message);
+            // We don't block the response, but it might mean the user has to wait for the webhook
+        }
+    }
+
     return res
       .status(200)
       .json(new apiResponse(200, "Session verified", {
@@ -154,7 +169,8 @@ export const verifySession = asyncHandler(async (req, res, next) => {
         subscriptionId: session.subscription?.id,
         userId: session.metadata?.userId,
         paymentStatus: session.payment_status,
-        metadata: session.metadata
+        metadata: session.metadata,
+        subscription: subscription // Return synced subscription details
       }));
   } catch (error) {
     console.error("Error verifying session:", error);
