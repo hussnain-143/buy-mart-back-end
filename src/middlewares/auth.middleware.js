@@ -8,28 +8,16 @@ import { options, REDIS_KEY_USER_PREFIX } from "../constant.js";
  * @desc Core authentication logic
  * @param {boolean} ignoreExpiration - Whether to allow expired tokens (e.g., for logout)
  */
-/**
- * @desc Core authentication logic
- * @param {boolean} ignoreExpiration - Whether to allow expired tokens (e.g., for logout)
- */
 const authenticate = async (req, res, next, ignoreExpiration = false) => {
-  console.log(`🔍 [DEBUG] authenticate called for ${req.method} ${req.url}`);
-  console.log(`🔍 [DEBUG] next is a function: ${typeof next === 'function'}`);
-
   try {
     // 1. Get token from cookies (primary) or Authorization header (fallback)
     let token = req.cookies?.accessToken;
 
-    // If not in cookies, try Authorization header
-    if (!token && req.headers.authorization) {
-      const authHeader = req.headers.authorization;
-      if (authHeader.startsWith("Bearer ")) {
-        token = authHeader.slice(7); // Remove "Bearer " prefix
-      }
+    if (!token && req.headers.authorization?.startsWith("Bearer ")) {
+      token = req.headers.authorization.slice(7);
     }
 
     if (!token) {
-      console.error("❌ No token found in cookies or Authorization header");
       throw new apiError(401, "Not authorized, access token missing");
     }
 
@@ -39,7 +27,6 @@ const authenticate = async (req, res, next, ignoreExpiration = false) => {
     });
 
     if (!decoded?.userId) {
-      console.error("❌ Decoded token has no userId");
       throw new apiError(401, "Invalid token");
     }
 
@@ -52,7 +39,6 @@ const authenticate = async (req, res, next, ignoreExpiration = false) => {
     if (!user) {
       user = await User.findById(userId).select("-password -refreshToken");
       if (!user) {
-        console.error("❌ User not found:", userId);
         throw new apiError(404, "User not found");
       }
 
@@ -62,21 +48,8 @@ const authenticate = async (req, res, next, ignoreExpiration = false) => {
 
     // 6. Attach user to request object
     req.user = user;
-    
-    if (typeof next === 'function') {
-        next();
-    } else {
-        console.error("❌ [CRITICAL] next is not a function at end of authenticate");
-        res.status(500).json({ success: false, message: "Internal Server Error: next is not a function" });
-    }
+    next();
   } catch (error) {
-    console.error("❌ Auth error:", error.message);
-    
-    if (typeof next !== 'function') {
-        console.error("❌ [CRITICAL] next is not a function in authenticate catch block");
-        return res.status(500).json({ success: false, message: "Internal Server Error: next is not a function" });
-    }
-
     if (error.name === "TokenExpiredError") {
       return next(new apiError(401, "Access token expired"));
     }
@@ -88,55 +61,35 @@ const authenticate = async (req, res, next, ignoreExpiration = false) => {
 };
 
 /**
- * @desc Strict Auth middleware to protect private routes
- * Rejects expired tokens.
+ * @desc Strict Auth middleware
  */
-export const authMiddleware = async (req, res, next) => {
-  await authenticate(req, res, next, false);
+export const authMiddleware = (req, res, next) => {
+  authenticate(req, res, next, false);
 };
 
 /**
  * @desc Admin only middleware
  */
-export const isAdmin = async (req, res, next) => {
+export const isAdmin = (req, res, next) => {
   if (req.user?.role !== "admin") {
-    if (typeof next === 'function') {
-        return next(new apiError(403, "Access denied. Admin role required."));
-    } else {
-        return res.status(403).json({ success: false, message: "Access denied. Admin role required." });
-    }
+    return next(new apiError(403, "Access denied. Admin role required."));
   }
-  if (typeof next === 'function') {
-    next();
-  } else {
-    console.error("❌ [CRITICAL] next is not a function in isAdmin");
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
+  next();
 };
 
 /**
  * @desc Vendor only middleware
  */
-export const isVendor = async (req, res, next) => {
+export const isVendor = (req, res, next) => {
   if (req.user?.role !== "vendor" && req.user?.role !== "admin") {
-    if (typeof next === 'function') {
-        return next(new apiError(403, "Access denied. Vendor role required."));
-    } else {
-        return res.status(403).json({ success: false, message: "Access denied. Vendor role required." });
-    }
+    return next(new apiError(403, "Access denied. Vendor role required."));
   }
-  if (typeof next === 'function') {
-    next();
-  } else {
-    console.error("❌ [CRITICAL] next is not a function in isVendor");
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
+  next();
 };
 
 /**
  * @desc Permissive Auth middleware for logout
- * Allows expired tokens so specific cleanup can still happen.
  */
-export const logoutMiddleware = async (req, res, next) => {
-  await authenticate(req, res, next, true);
+export const logoutMiddleware = (req, res, next) => {
+  authenticate(req, res, next, true);
 };
