@@ -136,7 +136,9 @@ export const getVendorStats = asyncHandler(async (req, res) => {
     const vendorProducts = await Product.find({ 
         $or: [
             { vendor_id: vendorId },
-            { vendor_id: req.user._id }
+            { vendor_id: vendorId.toString() },
+            { vendor_id: req.user._id },
+            { vendor_id: req.user._id.toString() }
         ]
     }).select("_id");
     const productIds = vendorProducts.map(p => p._id);
@@ -280,7 +282,14 @@ export const getSidebarMetrics = asyncHandler(async (req, res) => {
         const vendorId = vendor?._id;
 
         if (vendorId) {
-            const vendorProducts = await Product.find({ vendor_id: vendorId }).select("_id");
+            const vendorProducts = await Product.find({ 
+                $or: [
+                    { vendor_id: vendorId },
+                    { vendor_id: vendorId.toString() },
+                    { vendor_id: userId },
+                    { vendor_id: userId.toString() }
+                ]
+            }).select("_id");
             const productIds = vendorProducts.map(p => p._id);
 
             const [pendingOrdersCount, reviewsCount] = await Promise.all([

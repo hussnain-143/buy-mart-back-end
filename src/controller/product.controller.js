@@ -234,7 +234,9 @@ const getVendorProducts = asyncHandler(async (req, res) => {
     const products = await Product.find({ 
         $or: [
             { vendor_id: vendorId },
-            { vendor_id: req.user._id }
+            { vendor_id: vendorId.toString() },
+            { vendor_id: req.user._id },
+            { vendor_id: req.user._id.toString() }
         ]
     })
         .populate(["category_id", "brand_id", "images_id"])

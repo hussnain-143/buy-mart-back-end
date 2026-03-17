@@ -201,7 +201,9 @@ export const getVendorOrders = asyncHandler(async (req, res) => {
     const vendorProducts = await Product.find({ 
         $or: [
             { vendor_id: vendorId },
-            { vendor_id: req.user._id }
+            { vendor_id: vendorId.toString() },
+            { vendor_id: req.user._id },
+            { vendor_id: req.user._id.toString() }
         ]
     }).select("_id");
     const productIds = vendorProducts.map(p => p._id);
