@@ -53,13 +53,12 @@ const OrderSchema = new Schema(
 );
 
 // Pre-save hook to calculate total_amount from OrderItems
-OrderSchema.pre("save", async function (next) {
+OrderSchema.pre("save", async function () {
   try {
     const items = await OrderItemModel.find({ order_id: this._id });
     this.total_amount = items.reduce((sum, item) => sum + item.total_price, 0);
-    next();
   } catch (err) {
-    next(err);
+    throw err;
   }
 });
 
