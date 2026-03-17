@@ -77,7 +77,7 @@ const addProduct = asyncHandler(async (req, res) => {
     product.images_id = createdImages.map(img => img._id);
     await product.save();
 
-    return res.status(201).json(new apiResponse(201, product, "Product created successfully"));
+    return res.status(201).json(new apiResponse(201, "Product created successfully", product));
 });
 
 // Update Product
@@ -116,7 +116,7 @@ const updateProduct = asyncHandler(async (req, res) => {
         { new: true }
     );
 
-    return res.status(200).json(new apiResponse(200, updatedProduct, "Product updated successfully"));
+    return res.status(200).json(new apiResponse(200, "Product updated successfully", updatedProduct));
 });
 
 // Get All Products (with filters)
@@ -146,7 +146,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
     if (category) query.category_id = category;
     if (brand) query.brand_id = brand;
     if (is_featured !== undefined) query.is_featured = is_featured === "true";
-    if (is_active !== undefined) query.is_active = is_active === "true";
+    query.is_active = true; // Only active products for public view
     
     if (minPrice || maxPrice) {
         query.price = {};
@@ -163,7 +163,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
     const products = await Product.paginate(query, options);
 
-    return res.status(200).json(new apiResponse(200, products, "Products fetched successfully"));
+    return res.status(200).json(new apiResponse(200, "Products fetched successfully", products));
 });
 
 // Get Product By ID
@@ -180,7 +180,7 @@ const getProductById = asyncHandler(async (req, res) => {
 
     if (!product) throw new apiError(404, "Product not found");
 
-    return res.status(200).json(new apiResponse(200, product, "Product fetched successfully"));
+    return res.status(200).json(new apiResponse(200, "Product fetched successfully", product));
 });
 
 // Delete Product
@@ -197,13 +197,13 @@ const deleteProduct = asyncHandler(async (req, res) => {
 
     await Product.findByIdAndDelete(id);
 
-    return res.status(200).json(new apiResponse(200, {}, "Product deleted successfully"));
+    return res.status(200).json(new apiResponse(200, "Product deleted successfully", {}));
 });
 
 // Admin All Products
 const getAdminProducts = asyncHandler(async (req, res) => {
     const products = await Product.find().populate(["category_id", "brand_id", "vendor_id"]).sort("-createdAt");
-    return res.status(200).json(new apiResponse(200, products, "Admin products fetched successfully"));
+    return res.status(200).json(new apiResponse(200, "Admin products fetched successfully", products));
 });
 
 // Get Vendor Products
@@ -213,13 +213,13 @@ const getVendorProducts = asyncHandler(async (req, res) => {
         throw new apiError(404, "Vendor profile not found");
     }
     const products = await Product.find({ vendor_id: vendorId }).populate(["category_id", "brand_id"]).sort("-createdAt");
-    return res.status(200).json(new apiResponse(200, products, "Vendor products fetched successfully"));
+    return res.status(200).json(new apiResponse(200, "Vendor products fetched successfully", products));
 });
 
 // AI Search (placeholder)
 const aiSearch = asyncHandler(async (req, res) => {
     // Placeholder for AI search
-    return res.status(200).json(new apiResponse(200, [], "AI search not implemented"));
+    return res.status(200).json(new apiResponse(200, "AI search not implemented", []));
 });
 
 // Toggle Product Status (Admin)
@@ -232,7 +232,7 @@ const toggleProductStatus = asyncHandler(async (req, res) => {
     product.is_active = !product.is_active;
     await product.save();
 
-    return res.status(200).json(new apiResponse(200, product, `Product ${product.is_active ? "activated" : "deactivated"}`));
+    return res.status(200).json(new apiResponse(200, `Product ${product.is_active ? "activated" : "deactivated"}`, product));
 });
 
 export {
