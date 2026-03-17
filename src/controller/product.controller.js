@@ -231,7 +231,12 @@ const getVendorProducts = asyncHandler(async (req, res) => {
         throw new apiError(404, "Vendor profile not found");
     }
 
-    const products = await Product.find({ vendor_id: vendorId })
+    const products = await Product.find({ 
+        $or: [
+            { vendor_id: vendorId },
+            { vendor_id: req.user._id }
+        ]
+    })
         .populate(["category_id", "brand_id", "images_id"])
         .sort("-createdAt");
 

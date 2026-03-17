@@ -4,6 +4,7 @@ import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Create_Log_Entry } from "./log.controller.js";
 import { createLog } from "../service/log.services.js";
+import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 import { getCache, setCache, deleteCache } from "../utils/redis.util.js";
 import {
   REDIS_KEY_BRANDS,
@@ -37,10 +38,22 @@ export const addBrand = asyncHandler(async (req, res) => {
     throw new apiError(400, "Brand with this name already exists");
   }
 
+  let logoUrl = null;
+  if (req.file) {
+    try {
+      const result = await uploadToCloudinary(req.file.path);
+      logoUrl = result.secure_url;
+    } catch (error) {
+      console.error("❌ Brand logo upload failed:", error);
+      // Fallback or error based on requirements, here we throw
+      throw new apiError(500, "Failed to upload brand logo");
+    }
+  }
+
   const newBrand = new Brand({
     name: name.trim(),
     user_id: userId,
-    logo: req.file ? req.file.path : null, // Logo is optional now
+    logo: logoUrl,
   });
 
   await newBrand.save();

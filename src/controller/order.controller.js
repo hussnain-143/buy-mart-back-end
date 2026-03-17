@@ -164,9 +164,11 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         }
 
         const items = await OrderItem.find({ order_id: id }).populate("product_id");
-        const hasVendorProduct = items.some(item =>
-            item.product_id && item.product_id.vendor_id && item.product_id.vendor_id.toString() === vendorId.toString()
-        );
+        const hasVendorProduct = items.some(item => {
+            if (!item.product_id) return false;
+            const itemVendorId = item.product_id.vendor_id?.toString();
+            return itemVendorId === vendorId.toString() || itemVendorId === req.user._id.toString();
+        });
 
         if (!hasVendorProduct) {
             throw new apiError(403, "You can only update orders that contain your products");
@@ -196,7 +198,12 @@ export const getVendorOrders = asyncHandler(async (req, res) => {
         throw new apiError(404, "Vendor not found");
     }
 
-    const vendorProducts = await Product.find({ vendor_id: vendorId }).select("_id");
+    const vendorProducts = await Product.find({ 
+        $or: [
+            { vendor_id: vendorId },
+            { vendor_id: req.user._id }
+        ]
+    }).select("_id");
     const productIds = vendorProducts.map(p => p._id);
 
     const orderItems = await OrderItem.find({ product_id: { $in: productIds } })
@@ -214,10 +221,12 @@ export const getVendorOrders = asyncHandler(async (req, res) => {
         if (!ordersMap[orderId]) {
             ordersMap[orderId] = {
                 ...item.order_id.toObject(),
-                items: []
+                items: [],
+                vendor_total: 0
             };
         }
         ordersMap[orderId].items.push(item);
+        ordersMap[orderId].vendor_total += item.total_price;
     });
 
     const orders = Object.values(ordersMap);
