@@ -109,7 +109,14 @@ export const getVendorReviews = asyncHandler(async (req, res) => {
 
     // 2. Find all products belonging to this vendor
     const { ProductModel } = await import("../models/product.model.js");
-    const products = await ProductModel.find({ vendor_id: vendor._id }).select("_id");
+    const products = await ProductModel.find({ 
+        $or: [
+            { vendor_id: vendor._id },
+            { vendor_id: vendor._id.toString() },
+            { vendor_id: userId },
+            { vendor_id: userId.toString() }
+        ]
+    }).select("_id");
     const productIds = products.map(p => p._id);
 
     // 3. Find all reviews for these products

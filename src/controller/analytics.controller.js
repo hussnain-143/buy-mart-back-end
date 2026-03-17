@@ -246,11 +246,37 @@ export const getVendorStats = asyncHandler(async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(5);
 
+    // Store Rating calculation
+    const reviews = await Review.aggregate([
+        { $match: { product_id: { $in: productIds } } },
+        { $group: { _id: null, avgRating: { $sum: "$rating" }, totalReviews: { $sum: 1 } } }
+    ]);
+    const storeRating = (reviews[0]?.avgRating / reviews[0]?.totalReviews) || 0;
+
+    // Sales Growth calculation
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+    const currentRevenue = formattedTrends.find(t => t._id.month === currentMonth && t._id.year === currentYear)?.revenue || 0;
+    const prevRevenue = formattedTrends.find(t => t._id.month === prevMonth && t._id.year === prevYear)?.revenue || 0;
+
+    let salesGrowth = "0%";
+    if (prevRevenue > 0) {
+        const growth = ((currentRevenue - prevRevenue) / prevRevenue) * 100;
+        salesGrowth = `${growth > 0 ? '+' : ''}${growth.toFixed(1)}%`;
+    } else if (currentRevenue > 0) {
+        salesGrowth = "100%";
+    }
+
     return res.status(200).json(
         new apiResponse(200, "Vendor stats retrieved successfully", {
             totalProducts,
             totalOrders,
             totalRevenue,
+            storeRating: storeRating.toFixed(1),
+            salesGrowth,
             revenueTrends: formattedTrends,
             topProducts,
             recentLogs
