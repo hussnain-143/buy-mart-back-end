@@ -115,7 +115,13 @@ export const getVendorReviews = asyncHandler(async (req, res) => {
     // 3. Find all reviews for these products
     const reviews = await Review.find({ product_id: { $in: productIds } })
         .populate("user_id", "userName firstName lastName profile_image")
-        .populate("product_id", "name images_id")
+        .populate({
+            path: "product_id",
+            select: "name images_id",
+            populate: {
+                path: "images_id"
+            }
+        })
         .sort({ createdAt: -1 });
 
     return res.status(200).json(

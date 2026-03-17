@@ -46,6 +46,12 @@ const addProduct = asyncHandler(async (req, res) => {
         throw new apiError(400, "At least one product image is required");
     }
 
+    // Find the vendor profile for this user
+    const vendorProfile = await Vendor.findOne({ owner: req.user._id });
+    if (!vendorProfile) {
+        throw new apiError(404, "Vendor profile not found. You must be a registered vendor to add products.");
+    }
+
     // Create product first
     const product = await Product.create({
         name,
@@ -58,7 +64,7 @@ const addProduct = asyncHandler(async (req, res) => {
         sku,
         is_active: is_active !== undefined ? is_active : true,
         is_featured: is_featured || false,
-        vendor_id: req.user._id
+        vendor_id: vendorProfile._id
     });
 
     // Handle images and link back to product
@@ -89,7 +95,10 @@ const updateProduct = asyncHandler(async (req, res) => {
     if (!product) throw new apiError(404, "Product not found");
 
     // Check if vendor owns product
-    if (product.vendor_id.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+    const vendorProfile = await Vendor.findOne({ owner: req.user._id });
+    const isOwner = vendorProfile && product.vendor_id.toString() === vendorProfile._id.toString();
+    
+    if (!isOwner && req.user.role !== "admin") {
         throw new apiError(403, "You do not have permission to update this product");
     }
 
@@ -191,7 +200,10 @@ const deleteProduct = asyncHandler(async (req, res) => {
     if (!product) throw new apiError(404, "Product not found");
 
     // Check permission
-    if (product.vendor_id.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+    const vendorProfile = await Vendor.findOne({ owner: req.user._id });
+    const isOwner = vendorProfile && product.vendor_id.toString() === vendorProfile._id.toString();
+
+    if (!isOwner && req.user.role !== "admin") {
         throw new apiError(403, "You do not have permission to delete this product");
     }
 
@@ -208,26 +220,21 @@ const getAdminProducts = asyncHandler(async (req, res) => {
 
 // Get Vendor Products
 const getVendorProducts = asyncHandler(async (req, res) => {
-    console.log("=== GET VENDOR PRODUCTS ===");
-    console.log("req.user._id:", req.user._id);
-    console.log("req.user.vendor_id:", req.user.vendor_id);
-    
-    // First try the vendor_id from the user object, otherwise look up the Vendor model
     let vendorId = req.user.vendor_id;
     
     if (!vendorId) {
         const vendorProfile = await Vendor.findOne({ owner: req.user._id });
-        console.log("vendorProfile lookup result:", vendorProfile);
         vendorId = vendorProfile?._id;
     }
-
-    console.log("Final resolved vendorId:", vendorId);
 
     if (!vendorId) {
         throw new apiError(404, "Vendor profile not found");
     }
-    const products = await Product.find({ vendor_id: vendorId }).populate(["category_id", "brand_id", "images_id"]).sort("-createdAt");
-    console.log("Found products count:", products.length);
+
+    const products = await Product.find({ vendor_id: vendorId })
+        .populate(["category_id", "brand_id", "images_id"])
+        .sort("-createdAt");
+
     return res.status(200).json(new apiResponse(200, "Vendor products fetched successfully", products));
 });
 
