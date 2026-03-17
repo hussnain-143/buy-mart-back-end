@@ -14,11 +14,11 @@ const router = Router();
 // All order routes are protected
 router.use(authMiddleware);
 
+router.get("/vendor", isVendor, getVendorOrders);
+router.get("/all", isAdmin, getAllOrders);
 router.get("/", getUserOrders);
 router.get("/:id", getOrderById);
 router.post("/", createOrder);
-router.get("/vendor", isVendor, getVendorOrders);
-router.get("/all", isAdmin, getAllOrders);
 router.patch("/:id/status", updateOrderStatus);
 
 export const orderRoutes = router;

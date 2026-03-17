@@ -16,7 +16,6 @@ const CategorySchema = new Schema(
       type: String,
       unique: true,
       lowercase: true,
-      index: true,
     },
 
     parent_id: {
@@ -45,13 +44,10 @@ const CategorySchema = new Schema(
 );
 
 // GENERATE SLUG 
-CategorySchema.pre("save", function (next) {
+CategorySchema.pre("save", async function () {
   if (this.isModified("name")) {
     this.slug = slugify(this.name, { lower: true });
   }
-  next();
 });
-
-CategorySchema.index({ name: 1, slug: 1 });
 
 export const CategoryModel = model("Category", CategorySchema);

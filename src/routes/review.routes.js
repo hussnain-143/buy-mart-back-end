@@ -3,7 +3,8 @@ import {
     addReview,
     getProductReviews,
     deleteReview,
-    getAllReviews
+    getAllReviews,
+    getVendorReviews
 } from "../controller/review.controller.js";
 import { authMiddleware, isAdmin } from "../middlewares/auth.middleware.js";
 
@@ -16,6 +17,7 @@ router.get("/product/:product_id", getProductReviews);
 router.use(authMiddleware);
 router.post("/", addReview);
 router.get("/all", isAdmin, getAllReviews);
+router.get("/vendor", getVendorReviews);
 router.delete("/:id", deleteReview);
 
 export const reviewRoutes = router;

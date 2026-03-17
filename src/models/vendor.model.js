@@ -52,6 +52,30 @@ const VendorSchema = new Schema(
       default: "",
     },
 
+    slug: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      lowercase: true,
+    },
+
+    support_email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
+
+    support_phone: {
+      type: String,
+      trim: true,
+    },
+
+    shop_address: {
+      type: String,
+      trim: true,
+    },
+
     is_active: {
       type: Boolean,
       default: false,

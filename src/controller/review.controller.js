@@ -3,6 +3,7 @@ import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { ACTIVITY_LOG_ACTIONS } from "../constant.js";
 
 /* =====================================================
@@ -32,15 +33,7 @@ export const addReview = asyncHandler(async (req, res) => {
     await newReview.save();
 
     // Activity Log
-    await Create_Log_Entry({
-        body: {
-            user_id: userId,
-            action: `${ACTIVITY_LOG_ACTIONS.REVIEW_ADDED} for Product ID ${product_id}`,
-            reference_id: newReview._id,
-        },
-    }, {
-        status: () => ({ json: () => { } }),
-    });
+    await createLog(userId, `${ACTIVITY_LOG_ACTIONS.REVIEW_ADDED} for Product ID ${product_id}`, newReview._id);
 
     return res.status(201).json(
         new apiResponse(201, "Review added successfully", newReview)
@@ -97,5 +90,35 @@ export const getAllReviews = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new apiResponse(200, "All reviews retrieved successfully", reviews)
+    );
+});
+
+/* =====================================================
+   GET VENDOR REVIEWS (Vendor Only)
+===================================================== */
+export const getVendorReviews = asyncHandler(async (req, res) => {
+    const userId = req.user._id || req.user.id;
+    
+    // 1. Find the vendor for this user
+    const { VendorModel } = await import("../models/vendor.model.js");
+    const vendor = await VendorModel.findOne({ owner: userId });
+    
+    if (!vendor) {
+        throw new apiError(404, "Vendor profile not found");
+    }
+
+    // 2. Find all products belonging to this vendor
+    const { ProductModel } = await import("../models/product.model.js");
+    const products = await ProductModel.find({ vendor_id: vendor._id }).select("_id");
+    const productIds = products.map(p => p._id);
+
+    // 3. Find all reviews for these products
+    const reviews = await Review.find({ product_id: { $in: productIds } })
+        .populate("user_id", "userName firstName lastName profile_image")
+        .populate("product_id", "name images_id")
+        .sort({ createdAt: -1 });
+
+    return res.status(200).json(
+        new apiResponse(200, "Vendor reviews retrieved successfully", reviews)
     );
 });

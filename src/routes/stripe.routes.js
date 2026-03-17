@@ -21,6 +21,7 @@ stripeRoutes.post(
 // Verify session
 stripeRoutes.get(
     "/verify",
+    authMiddleware,
     verifySession
 );
 

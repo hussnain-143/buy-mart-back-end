@@ -8,30 +8,27 @@ import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { logInfo } from "../service/log.services.js";
 
+import { createLog } from "../service/log.services.js";
+
 /* =====================================================
-   CREATE LOG ENTRY
+   CREATE LOG ENTRY (Controller for API usage if needed)
 ===================================================== */
-export const Create_Log_Entry = asyncHandler(async (req, res) => {
+export const Create_Log_Entry_API = asyncHandler(async (req, res) => {
     const { user_id, action, reference_id } = req.body;
 
     if (!user_id || !action) {
         throw new apiError(400, "User ID and action are required");
     }
 
-    const logEntry = new Log({
-        user_id,
-        action,
-        reference_id: reference_id || null,
-    });
-
-    await logEntry.save();
-
-    logInfo(`Log entry created for user: ${user_id}, action: ${action}`);
+    const logEntry = await createLog(user_id, action, reference_id);
 
     return res.status(201).json(
         new apiResponse(201, "Log entry created successfully", logEntry)
     );
 });
+
+// For backward compatibility while I update other files
+export const Create_Log_Entry = Create_Log_Entry_API;
 
 /* =====================================================
    GET ALL LOG ENTRIES (Admin)

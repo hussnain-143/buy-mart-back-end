@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { setCache, getCache, deleteCache } from "../utils/redis.util.js";
 import { REDIS_KEY_VENDORS_ALL, ACTIVITY_LOG_ACTIONS } from "../constant.js";
 
@@ -13,10 +14,11 @@ import { REDIS_KEY_VENDORS_ALL, ACTIVITY_LOG_ACTIONS } from "../constant.js";
  */
 export const createVendor = asyncHandler(async (req, res, next) => {
   try {
-    const { shop_name, description } = req.body;
+    const { shop_name, description, desc } = req.body;
+    const finalDesc = description || desc;
 
-    if (!shop_name || !description) {
-      console.error("❌ Missing fields - shop_name:", shop_name, "description:", description);
+    if (!shop_name || !finalDesc) {
+      console.error("❌ Missing fields - shop_name:", shop_name, "description/desc:", finalDesc);
       return next(new apiError(400, "Shop name and description are required"));
     }
 
@@ -66,7 +68,7 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     // Create vendor
     const newVendor = await VendorModel.create({
       shop_name,
-      desc: description,
+      desc: finalDesc,
       owner: req.user._id,
       profile_image: profileImageUrl,
       cover_image: coverImageUrl,
@@ -79,13 +81,7 @@ export const createVendor = asyncHandler(async (req, res, next) => {
     await subscription.save();
 
     // Log vendor creation
-    await Create_Log_Entry({
-      body: {
-        user_id: req.user._id,
-        action: `${ACTIVITY_LOG_ACTIONS.VENDOR_CREATED} with Shop Name: ${shop_name}`,
-        reference_id: newVendor._id,
-      },
-    });
+    await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.VENDOR_CREATED} with Shop Name: ${shop_name}`, newVendor._id);
 
     // Invalidate all vendors cache
     await deleteCache(REDIS_KEY_VENDORS_ALL);
@@ -149,13 +145,7 @@ export const approveVendor = asyncHandler(async (req, res, next) => {
     await deleteCache(REDIS_KEY_VENDORS_ALL);
 
     // Log vendor approval
-    await Create_Log_Entry({
-      body: {
-        user_id: req.user._id,
-        action: `${ACTIVITY_LOG_ACTIONS.VENDOR_APPROVED} for Shop Name: ${vendor.shop_name}`,
-        reference_id: vendor._id,
-      },
-    });
+    await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.VENDOR_APPROVED} for Shop Name: ${vendor.shop_name}`, vendor._id);
 
     return res.status(200).json(new apiResponse(200, "Vendor approved successfully", vendor));
   } catch (error) {
@@ -209,14 +199,11 @@ export const setVendorStripeId = asyncHandler(async (req, res, next) => {
     );
 });
 
-/**
- * Toggle Vendor Status (Admin Only)
- */
 export const toggleVendorStatus = asyncHandler(async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const vendor = await VendorModel.findById(id).populate('owner');
+    const vendor = await VendorModel.findById(id);
     if (!vendor) {
       return next(new apiError(404, "Vendor not found"));
     }
@@ -227,20 +214,78 @@ export const toggleVendorStatus = asyncHandler(async (req, res, next) => {
     // Invalidate all vendors cache
     await deleteCache(REDIS_KEY_VENDORS_ALL);
 
-    // Activity Log
-    await Create_Log_Entry({
-      body: {
-        user_id: req.user._id,
-        action: `${ACTIVITY_LOG_ACTIONS.VENDOR_APPROVED}: Status toggled to ${vendor.is_active ? 'Active' : 'Blocked'} for ${vendor.shop_name}`,
-        reference_id: vendor._id,
-      },
-    });
+    // Log status toggle
+    await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.VENDOR_UPDATED}: Status toggled for ${vendor.shop_name} to ${vendor.is_active ? 'active' : 'inactive'}`, vendor._id);
 
-    return res.status(200).json(
-      new apiResponse(200, `Vendor ${vendor.is_active ? 'activated' : 'blocked'} successfully`, vendor)
-    );
+    return res.status(200).json(new apiResponse(200, "Vendor status updated successfully", vendor));
   } catch (error) {
     console.error("❌ Toggle vendor status error:", error);
+    next(error);
+  }
+});
+
+/**
+ * Get Own Vendor Profile
+ */
+export const getMyVendor = asyncHandler(async (req, res, next) => {
+  try {
+    const vendor = await VendorModel.findOne({ owner: req.user._id });
+    if (!vendor) {
+      return next(new apiError(404, "Vendor profile not found"));
+    }
+
+    return res.status(200).json(new apiResponse(200, "Vendor profile retrieved successfully", vendor));
+  } catch (error) {
+    console.error("❌ Get my vendor error:", error);
+    next(error);
+  }
+});
+
+/**
+ * Update Vendor Profile
+ */
+export const updateVendor = asyncHandler(async (req, res, next) => {
+  try {
+    const { shop_name, description, desc, support_email, support_phone, shop_address, slug } = req.body;
+    const finalDesc = description || desc;
+
+    const vendor = await VendorModel.findOne({ owner: req.user._id });
+    if (!vendor) {
+      return next(new apiError(404, "Vendor profile not found"));
+    }
+
+    if (shop_name) vendor.shop_name = shop_name;
+    if (finalDesc) vendor.desc = finalDesc;
+    if (support_email) vendor.support_email = support_email;
+    if (support_phone) vendor.support_phone = support_phone;
+    if (shop_address) vendor.shop_address = shop_address;
+    if (slug) vendor.slug = slug;
+
+    // Handle Image Uploads
+    if (req.files?.profile_image?.[0]) {
+      const result = await uploadToCloudinary(req.files.profile_image[0].path);
+      vendor.profile_image = result.secure_url;
+    }
+    if (req.files?.cover_image?.[0]) {
+      const result = await uploadToCloudinary(req.files.cover_image[0].path);
+      vendor.cover_image = result.secure_url;
+    }
+
+    await vendor.save();
+
+    // Log update
+    await createLog(
+      req.user._id,
+      `${ACTIVITY_LOG_ACTIONS.VENDOR_UPDATED}: ${vendor.shop_name}`,
+      vendor._id
+    );
+
+    // Invalidate caches
+    await deleteCache(REDIS_KEY_VENDORS_ALL);
+
+    return res.status(200).json(new apiResponse(200, "Vendor profile updated successfully", vendor));
+  } catch (error) {
+    console.error("❌ Update vendor error:", error);
     next(error);
   }
 });

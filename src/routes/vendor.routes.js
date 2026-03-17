@@ -5,7 +5,9 @@ import {
   approveVendor,
   getVendorStripeId,
   setVendorStripeId,
-  toggleVendorStatus
+  toggleVendorStatus,
+  getMyVendor,
+  updateVendor
 } from "../controller/vendor.controller.js";
 import { authMiddleware, isAdmin } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -40,6 +42,18 @@ vendorRoutes.get("/all", authMiddleware, getAllVendors);
 vendorRoutes.post('/approve', authMiddleware, approveVendor);
 vendorRoutes.get("/stripe-id", authMiddleware, getVendorStripeId);
 vendorRoutes.put("/stripe-id", authMiddleware, setVendorStripeId);
+
+// Profile routes
+vendorRoutes.get("/me", authMiddleware, getMyVendor);
+vendorRoutes.patch(
+  "/update",
+  authMiddleware,
+  upload.fields([
+    { name: "profile_image", maxCount: 1 },
+    { name: "cover_image", maxCount: 1 },
+  ]),
+  updateVendor
+);
 
 // Admin routes
 vendorRoutes.patch("/admin/:id/toggle-status", authMiddleware, isAdmin, toggleVendorStatus);

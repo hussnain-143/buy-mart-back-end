@@ -1,345 +1,248 @@
-import { ProductModel as Product } from "../models/product.model.js";
-import { ImageModel as Image } from "../models/product_images.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
+import { ProductModel as Product } from "../models/product.model.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
-import { Create_Log_Entry } from "./log.controller.js";
-import { getCache, setCache, deleteCache } from "../utils/redis.util.js";
-import {
-    REDIS_KEY_PRODUCTS_ALL,
-    ACTIVITY_LOG_ACTIONS
-} from "../constant.js";
+import { CategoryModel as Category } from "../models/category.model.js";
+import { BrandModel as Brand } from "../models/brand.model.js";
+import { VendorModel as Vendor } from "../models/vendor.model.js";
+import { ImageModel as Image } from "../models/product_images.model.js";
 import mongoose from "mongoose";
 
-// Helper to clear product caches
-const clearProductCaches = async () => {
-    await deleteCache(REDIS_KEY_PRODUCTS_ALL);
-};
+// Add Product
+const addProduct = asyncHandler(async (req, res) => {
+    const { 
+        name, 
+        desc, // Changed from description
+        price, 
+        discount_price, 
+        stock_quantity, 
+        category_id, 
+        brand_id, 
+        sku, 
+        is_active, 
+        is_featured 
+    } = req.body;
 
-/* =====================================================
-   ADD PRODUCT
-===================================================== */
-export const addProduct = asyncHandler(async (req, res) => {
-    const { name, desc, price, discount_price, sku, stock_quantity, category_id, brand_id } = req.body;
-    const userId = req.user._id || req.user.id;
-    const vendorId = req.user.vendor_id; // Assuming vendor_id is attached to user by auth middleware or fetched
-
-    if (!name || !desc || !price || !sku || !category_id || !brand_id) {
-        throw new apiError(400, "Required fields are missing");
+    // Validation
+    if ([name, desc, price, sku, category_id, brand_id].some((field) => field?.toString().trim() === "")) {
+        throw new apiError(400, "All required fields must be filled");
     }
+
+    // Check if category and brand exist
+    const category = await Category.findById(category_id);
+    if (!category) throw new apiError(404, "Category not found");
+
+    const brand = await Brand.findById(brand_id);
+    if (!brand) throw new apiError(404, "Brand not found");
 
     // Check if SKU exists
-    const existingProduct = await Product.findOne({ sku });
-    if (existingProduct) {
-        throw new apiError(400, "Product with this SKU already exists");
+    const SKU_Exist = await Product.findOne({ sku });
+    if (SKU_Exist) throw new apiError(409, "Product with this SKU already exists");
+
+    // Handle images
+    const files = req.files;
+    if (!files || files.length === 0) {
+        throw new apiError(400, "At least one product image is required");
     }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // Create product first
+    const product = await Product.create({
+        name,
+        desc,
+        price,
+        discount_price: discount_price || 0,
+        stock_quantity,
+        category_id,
+        brand_id,
+        sku,
+        is_active: is_active !== undefined ? is_active : true,
+        is_featured: is_featured || false,
+        vendor_id: req.user._id
+    });
 
-    try {
-        const newProduct = new Product({
-            name,
-            desc,
-            price,
-            discount_price: discount_price || 0,
-            sku,
-            stock_quantity: stock_quantity || 0,
-            vendor_id: vendorId,
-            category_id,
-            brand_id,
-        });
+    // Handle images and link back to product
+    const imageUploadPromises = files.map((file) => uploadToCloudinary(file.path));
+    const uploadedImages = await Promise.all(imageUploadPromises);
 
-        await newProduct.save({ session });
+    const imagePromises = uploadedImages.map((img, index) => Image.create({
+        image_url: img.secure_url,
+        product_id: product._id,
+        isPrimary: index === 0
+    }));
 
-        // Handle Images
-        if (req.files && req.files.length > 0) {
-            const imageIds = [];
-            for (const [index, file] of req.files.entries()) {
-                const result = await uploadToCloudinary(file.path);
-                const newImage = new Image({
-                    image_url: result.secure_url,
-                    product_id: newProduct._id,
-                    isPrimary: index === 0, // First image is primary
-                });
-                await newImage.save({ session });
-                imageIds.push(newImage._id);
-            }
-            newProduct.images_id = imageIds;
-            await newProduct.save({ session });
-        }
+    const createdImages = await Promise.all(imagePromises);
 
-        await session.commitTransaction();
-        session.endSession();
+    // Update product with image references
+    product.images_id = createdImages.map(img => img._id);
+    await product.save();
 
-        // Clear Cache
-        await clearProductCaches();
-
-        // Activity Log
-        await Create_Log_Entry({
-            body: {
-                user_id: userId,
-                action: `${ACTIVITY_LOG_ACTIONS.PRODUCT_CREATED}: ${newProduct.name}`,
-                reference_id: newProduct._id,
-            },
-        }, {
-            status: () => ({ json: () => { } }),
-        });
-
-        return res.status(201).json(
-            new apiResponse(201, "Product added successfully", newProduct)
-        );
-    } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
-        throw error;
-    }
+    return res.status(201).json(new apiResponse(201, product, "Product created successfully"));
 });
 
-/* =====================================================
-   GET ALL PRODUCTS (with Pagination and Filtering)
-===================================================== */
-export const getAllProducts = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, category, brand, minPrice, maxPrice, search } = req.query;
+// Update Product
+const updateProduct = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
 
-    const query = { is_active: true };
+    const product = await Product.findById(id);
+    if (!product) throw new apiError(404, "Product not found");
+
+    // Check if vendor owns product
+    if (product.vendor_id.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+        throw new apiError(403, "You do not have permission to update this product");
+    }
+
+    // If images are provided in update
+    if (req.files && req.files.length > 0) {
+        const imageUploadPromises = req.files.map((file) => uploadToCloudinary(file.path));
+        const uploadedImages = await Promise.all(imageUploadPromises);
+        
+        const imagePromises = uploadedImages.map((img) => Image.create({
+            image_url: img.secure_url,
+            product_id: product._id,
+            isPrimary: false // User can decide later
+        }));
+        
+        const createdImages = await Promise.all(imagePromises);
+        const newImageIds = createdImages.map(img => img._id);
+        
+        updateData.images_id = [...(product.images_id || []), ...newImageIds];
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true }
+    );
+
+    return res.status(200).json(new apiResponse(200, updatedProduct, "Product updated successfully"));
+});
+
+// Get All Products (with filters)
+const getAllProducts = asyncHandler(async (req, res) => {
+    const { 
+        page = 1, 
+        limit = 10, 
+        search, 
+        category, 
+        brand, 
+        minPrice, 
+        maxPrice, 
+        sort = "-createdAt",
+        is_featured,
+        is_active
+    } = req.query;
+
+    const query = {};
+
+    if (search) {
+        query.$or = [
+            { name: { $regex: search, $options: "i" } },
+            { desc: { $regex: search, $options: "i" } }
+        ];
+    }
 
     if (category) query.category_id = category;
     if (brand) query.brand_id = brand;
+    if (is_featured !== undefined) query.is_featured = is_featured === "true";
+    if (is_active !== undefined) query.is_active = is_active === "true";
+    
     if (minPrice || maxPrice) {
         query.price = {};
         if (minPrice) query.price.$gte = Number(minPrice);
         if (maxPrice) query.price.$lte = Number(maxPrice);
     }
-    if (search) {
-        query.$text = { $search: search };
-    }
 
     const options = {
         page: parseInt(page),
         limit: parseInt(limit),
-        populate: ["category_id", "brand_id", "images_id"],
-        sort: { createdAt: -1 },
+        sort,
+        populate: ["category_id", "brand_id", "vendor_id"]
     };
 
     const products = await Product.paginate(query, options);
 
-    return res.status(200).json(
-        new apiResponse(200, "Products retrieved successfully", products)
-    );
+    return res.status(200).json(new apiResponse(200, products, "Products fetched successfully"));
 });
 
-/* =====================================================
-   GET PRODUCT BY ID
-===================================================== */
-export const getProductById = asyncHandler(async (req, res) => {
+// Get Product By ID
+const getProductById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
+    // Support both SKU and ID
     let product;
     if (mongoose.Types.ObjectId.isValid(id)) {
-        product = await Product.findById(id).populate(["category_id", "brand_id", "images_id"]);
+        product = await Product.findById(id).populate(["category_id", "brand_id", "vendor_id"]);
     } else {
-        product = await Product.findOne({ sku: id }).populate(["category_id", "brand_id", "images_id"]);
+        product = await Product.findOne({ sku: id }).populate(["category_id", "brand_id", "vendor_id"]);
     }
 
-    if (!product) {
-        throw new apiError(404, "Product not found");
-    }
+    if (!product) throw new apiError(404, "Product not found");
 
-    return res.status(200).json(
-        new apiResponse(200, "Product retrieved successfully", product)
-    );
+    return res.status(200).json(new apiResponse(200, product, "Product fetched successfully"));
 });
 
-/* =====================================================
-   AI SEARCH (Fuzzy Matching)
-===================================================== */
-export const aiSearch = asyncHandler(async (req, res) => {
-    const { q } = req.query;
-
-    if (!q) {
-        throw new apiError(400, "Search query is required");
-    }
-
-    // Advanced fuzzy matching using regex for each word
-    const keywords = q.split(/\s+/).filter(word => word.length > 0);
-    const regexQueries = keywords.map(kw => new RegExp(kw, 'i'));
-
-    const products = await Product.find({
-        is_active: true,
-        $or: [
-            { name: { $in: regexQueries } },
-            { desc: { $in: regexQueries } },
-            { sku: { $in: regexQueries } }
-        ]
-    }).populate(["category_id", "brand_id", "images_id"]).limit(20);
-
-    return res.status(200).json(
-        new apiResponse(200, "AI search results retrieved", products)
-    );
-});
-
-/* =====================================================
-   UPDATE PRODUCT
-===================================================== */
-export const updateProduct = asyncHandler(async (req, res) => {
+// Delete Product
+const deleteProduct = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updates = req.body;
-    const userId = req.user._id || req.user.id;
 
     const product = await Product.findById(id);
-    if (!product) {
-        throw new apiError(404, "Product not found");
+    if (!product) throw new apiError(404, "Product not found");
+
+    // Check permission
+    if (product.vendor_id.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+        throw new apiError(403, "You do not have permission to delete this product");
     }
 
-    // Verify ownership
-    if (product.vendor_id.toString() !== req.user.vendor_id?.toString() && req.user.role !== 'admin') {
-        throw new apiError(403, "Unauthorized to update this product");
-    }
-
-    const updatedProduct = await Product.findByIdAndUpdate(id, updates, { new: true }).populate(["category_id", "brand_id", "images_id"]);
-
-    // Clear Cache
-    await clearProductCaches();
-
-    // Activity Log
-    await Create_Log_Entry({
-        body: {
-            user_id: userId,
-            action: `${ACTIVITY_LOG_ACTIONS.PRODUCT_UPDATED}: ${updatedProduct.name}`,
-            reference_id: updatedProduct._id,
-        },
-    }, {
-        status: () => ({ json: () => { } }),
-    });
-
-    return res.status(200).json(
-        new apiResponse(200, "Product updated successfully", updatedProduct)
-    );
-});
-
-/* =====================================================
-   DELETE PRODUCT
-===================================================== */
-export const deleteProduct = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const userId = req.user._id || req.user.id;
-
-    const product = await Product.findById(id);
-    if (!product) {
-        throw new apiError(404, "Product not found");
-    }
-
-    // Verify ownership
-    if (product.vendor_id.toString() !== req.user.vendor_id?.toString() && req.user.role !== 'admin') {
-        throw new apiError(403, "Unauthorized to delete this product");
-    }
-
-    const productName = product.name;
     await Product.findByIdAndDelete(id);
-    // Optionally delete images from Cloudinary and DB
-    await ImageModel.deleteMany({ product_id: id });
 
-    // Clear Cache
-    await clearProductCaches();
-
-    // Activity Log
-    await Create_Log_Entry({
-        body: {
-            user_id: userId,
-            action: `${ACTIVITY_LOG_ACTIONS.PRODUCT_DELETED}: ${productName}`,
-            reference_id: null,
-        },
-    }, {
-        status: () => ({ json: () => { } }),
-    });
-
-    return res.status(200).json(
-        new apiResponse(200, "Product deleted successfully")
-    );
+    return res.status(200).json(new apiResponse(200, {}, "Product deleted successfully"));
 });
 
-/* =====================================================
-   GET VENDOR PRODUCTS
-===================================================== */
-export const getVendorProducts = asyncHandler(async (req, res) => {
-    const userId = req.user._id || req.user.id;
+// Admin All Products
+const getAdminProducts = asyncHandler(async (req, res) => {
+    const products = await Product.find().populate(["category_id", "brand_id", "vendor_id"]).sort("-createdAt");
+    return res.status(200).json(new apiResponse(200, products, "Admin products fetched successfully"));
+});
 
-    // Use aggregate to find vendor associated with user if not directly in req.user
-    // But typically we should have it or we can find it.
-    // Let's find vendor by owner
-    const { VendorModel } = await import("../models/vendor.model.js");
-    const vendor = await VendorModel.findOne({ owner: userId });
-
-    if (!vendor) {
+// Get Vendor Products
+const getVendorProducts = asyncHandler(async (req, res) => {
+    const vendorId = req.user.vendor_id || (await Vendor.findOne({ owner: req.user._id }))?._id;
+    if (!vendorId) {
         throw new apiError(404, "Vendor profile not found");
     }
-
-    const { page = 1, limit = 50 } = req.query;
-    const options = {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        populate: ["category_id", "brand_id", "images_id"],
-        sort: { createdAt: -1 },
-    };
-
-    const products = await Product.paginate({ vendor_id: vendor._id }, options);
-
-    return res.status(200).json(
-        new apiResponse(200, "Vendor products retrieved successfully", products)
-    );
+    const products = await Product.find({ vendor_id: vendorId }).populate(["category_id", "brand_id"]).sort("-createdAt");
+    return res.status(200).json(new apiResponse(200, products, "Vendor products fetched successfully"));
 });
 
-/* =====================================================
-   GET ALL PRODUCTS (Admin Only - Includes Inactive)
-===================================================== */
-export const getAdminProducts = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 50 } = req.query;
-    const options = {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        populate: ["category_id", "brand_id", "images_id"],
-        sort: { createdAt: -1 },
-    };
-
-    // No is_active filter for admins
-    const products = await Product.paginate({}, options);
-
-    return res.status(200).json(
-        new apiResponse(200, "All products retrieved successfully", products)
-    );
+// AI Search (placeholder)
+const aiSearch = asyncHandler(async (req, res) => {
+    // Placeholder for AI search
+    return res.status(200).json(new apiResponse(200, [], "AI search not implemented"));
 });
 
-/* =====================================================
-   TOGGLE PRODUCT STATUS (Admin Only)
-===================================================== */
-export const toggleProductStatus = asyncHandler(async (req, res) => {
+// Toggle Product Status (Admin)
+const toggleProductStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
-
     const product = await Product.findById(id);
-    if (!product) {
-        throw new apiError(404, "Product not found");
-    }
+    
+    if (!product) throw new apiError(404, "Product not found");
 
     product.is_active = !product.is_active;
     await product.save();
 
-    // Clear Cache
-    await clearProductCaches();
-
-    // Activity Log
-    await Create_Log_Entry({
-        body: {
-            user_id: req.user._id,
-            action: `${ACTIVITY_LOG_ACTIONS.PRODUCT_UPDATED}: Status toggled to ${product.is_active} for ${product.name}`,
-            reference_id: product._id,
-        },
-    }, {
-        status: () => ({ json: () => { } }),
-    });
-
-    return res.status(200).json(
-        new apiResponse(200, `Product ${product.is_active ? 'activated' : 'deactivated'} successfully`, product)
-    );
+    return res.status(200).json(new apiResponse(200, product, `Product ${product.is_active ? "activated" : "deactivated"}`));
 });
+
+export {
+    addProduct,
+    getAllProducts,
+    getProductById,
+    aiSearch,
+    updateProduct,
+    deleteProduct,
+    getVendorProducts,
+    getAdminProducts,
+    toggleProductStatus
+};

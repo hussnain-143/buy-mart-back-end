@@ -16,7 +16,6 @@ const BrandSchema = new Schema(
       type: String,
       unique: true,
       lowercase: true,
-      index: true,
     },
 
     user_id: {
@@ -44,8 +43,5 @@ BrandSchema.pre("save", async function () {
     this.slug = slugify(this.name, { lower: true, strict: true });
   }
 });
-
-BrandSchema.index({ name: 1 });
-BrandSchema.index({ slug: 1 });
 
 export const BrandModel = model("Brand", BrandSchema);

@@ -8,6 +8,7 @@ import { setCache, deleteCache } from "../utils/redis.util.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { VendorSubscriptionModel } from "../models/vendor_subscription.model.js";
 
 /* =====================================================
@@ -91,15 +92,7 @@ export const Signup_User = asyncHandler(async (req, res) => {
 
   if (createdUser) {
     // Create log entry for new user registration
-    await Create_Log_Entry({
-      body: {
-        user_id: createdUser._id,
-        action: `${ACTIVITY_LOG_ACTIONS.USER_REGISTRATION} with Username: ${createdUser.userName}`,
-        reference_id: null,
-      },
-    }, {
-      status: () => ({ json: () => { } }),
-    });
+    await createLog(createdUser._id, `${ACTIVITY_LOG_ACTIONS.USER_REGISTRATION} with Username: ${createdUser.userName}`, null);
   }
 
   return res.status(201).json(
@@ -309,15 +302,7 @@ export const Update_Profile = asyncHandler(async (req, res) => {
   await setCache(`user:${req.user._id}`, updatedUser, 60 * 60 * 5);
 
   // Create log entry for profile update
-  await Create_Log_Entry({
-    body: {
-      user_id: req.user._id,
-      action: `${ACTIVITY_LOG_ACTIONS.USER_PROFILE_UPDATED} for Username: ${updatedUser.userName}`,
-      reference_id: null,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.USER_PROFILE_UPDATED} for Username: ${updatedUser.userName}`, null);
 
   return res.status(200).json(
     new apiResponse(200, "User profile updated successfully", {
@@ -348,15 +333,7 @@ export const Update_Address = asyncHandler(async (req, res) => {
   await setCache(`user:${req.user._id}`, updatedUser, 60 * 60 * 5);
 
   // Create log entry for address update
-  await Create_Log_Entry({
-    body: {
-      user_id: req.user._id,
-      action: `${ACTIVITY_LOG_ACTIONS.USER_ADDRESS_UPDATED} for Username: ${updatedUser.userName}`,
-      reference_id: null,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.USER_ADDRESS_UPDATED} for Username: ${updatedUser.userName}`, null);
 
   return res.status(200).json(
     new apiResponse(200, "Address updated successfully", {
@@ -393,15 +370,7 @@ export const Update_Password = asyncHandler(async (req, res) => {
   res.clearCookie("refreshToken");
 
   // Create log entry for password update
-  await Create_Log_Entry({
-    body: {
-      user_id: req.user._id,
-      action: `${ACTIVITY_LOG_ACTIONS.USER_PASSWORD_UPDATED} for Username: ${user.userName}`,
-      reference_id: null,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.USER_PASSWORD_UPDATED} for Username: ${user.userName}`, null);
 
   return res.status(200).json(
     new apiResponse(
@@ -446,15 +415,7 @@ export const Toggle_User_Status = asyncHandler(async (req, res) => {
   }
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: req.user._id,
-      action: `${ACTIVITY_LOG_ACTIONS.USER_PROFILE_UPDATED}: Status toggled to ${user.isActive ? 'Active' : 'Blocked'} for ${user.userName}`,
-      reference_id: user._id,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.USER_PROFILE_UPDATED}: Status toggled to ${user.isActive ? 'Active' : 'Blocked'} for ${user.userName}`, user._id);
 
   return res.status(200).json(
     new apiResponse(200, `User ${user.isActive ? 'activated' : 'blocked'} successfully`, { user })

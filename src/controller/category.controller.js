@@ -3,6 +3,7 @@ import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { getCache, setCache, deleteCache } from "../utils/redis.util.js";
 import {
   REDIS_KEY_CATEGORIES_ALL,
@@ -42,15 +43,7 @@ export const addCategory = asyncHandler(async (req, res) => {
   await clearCategoryCaches();
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.CATEGORY_CREATED}: ${newCategory.name}`,
-      reference_id: newCategory._id,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.CATEGORY_CREATED}: ${newCategory.name}`, newCategory._id);
 
   return res.status(201).json(
     new apiResponse(201, "Category added successfully", newCategory)
@@ -61,6 +54,7 @@ export const addCategory = asyncHandler(async (req, res) => {
    GET ALL CATEGORIES (with Caching)
 ===================================================== */
 export const getAllCategories = asyncHandler(async (req, res) => {
+  console.log("🚀 [CONTROLLER] Entering getAllCategories");
   // Try to get from Cache
   const cachedCategories = await getCache(REDIS_KEY_CATEGORIES_ALL);
   if (cachedCategories) {
@@ -116,15 +110,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
   await clearCategoryCaches();
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.CATEGORY_UPDATED}: ${category.name}`,
-      reference_id: category._id,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.CATEGORY_UPDATED}: ${category.name}`, category._id);
 
   return res.status(200).json(
     new apiResponse(200, "Category updated successfully", category)
@@ -150,15 +136,7 @@ export const deleteCategory = asyncHandler(async (req, res) => {
   await clearCategoryCaches();
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.CATEGORY_DELETED}: ${categoryName}`,
-      reference_id: null,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.CATEGORY_DELETED}: ${categoryName}`, null);
 
   return res.status(200).json(
     new apiResponse(200, "Category deleted successfully")

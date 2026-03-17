@@ -4,6 +4,7 @@ import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { deleteCache } from "../utils/redis.util.js";
 import { REDIS_KEY_DEALS_ALL, ACTIVITY_LOG_ACTIONS } from "../constant.js";
 import { VendorModel } from "../models/vendor.model.js";
@@ -44,16 +45,8 @@ export const addDeal = asyncHandler(async (req, res) => {
   });
 
   await clearDealCaches();
-
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.DEAL_CREATED}: ${newDeal.name}`,
-      reference_id: newDeal._id,
-    },
-  }, {
-    status: () => ({ json: () => {} }),
-  });
+  // Activity Log
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.DEAL_CREATED}: ${newDeal.name}`, newDeal._id);
 
   return res.status(201).json(new apiResponse(201, "Deal added successfully", newDeal));
 });
@@ -107,16 +100,8 @@ export const updateDeal = asyncHandler(async (req, res) => {
   const updatedDeal = await Deal.findByIdAndUpdate(id, updates, { new: true });
 
   await clearDealCaches();
-
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.DEAL_UPDATED}: ${updatedDeal.name}`,
-      reference_id: updatedDeal._id,
-    },
-  }, {
-    status: () => ({ json: () => {} }),
-  });
+  // Activity Log
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.DEAL_UPDATED}: ${updatedDeal.name}`, updatedDeal._id);
 
   return res.status(200).json(new apiResponse(200, "Deal updated successfully", updatedDeal));
 });
@@ -139,16 +124,8 @@ export const deleteDeal = asyncHandler(async (req, res) => {
   await Deal.findByIdAndDelete(id);
 
   await clearDealCaches();
-
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.DEAL_DELETED}: ${dealName}`,
-      reference_id: null,
-    },
-  }, {
-    status: () => ({ json: () => {} }),
-  });
+  // Activity Log
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.DEAL_DELETED}: ${dealName}`, null);
 
   return res.status(200).json(new apiResponse(200, "Deal deleted successfully"));
 });

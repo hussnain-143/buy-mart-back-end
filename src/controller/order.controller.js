@@ -7,6 +7,7 @@ import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { ACTIVITY_LOG_ACTIONS } from "../constant.js";
 import mongoose from "mongoose";
 
@@ -27,6 +28,16 @@ export const createOrder = asyncHandler(async (req, res) => {
         throw new apiError(400, "Cart is empty");
     }
 
+    // If stripe session is provided, check for existing order to prevent duplicates
+    if (req.body.stripe_session_id) {
+        const existingOrder = await Order.findOne({ stripe_session_id: req.body.stripe_session_id });
+        if (existingOrder) {
+            return res.status(200).json(
+                new apiResponse(200, "Order already processed", existingOrder)
+            );
+        }
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -37,8 +48,9 @@ export const createOrder = asyncHandler(async (req, res) => {
             shipping_address,
             billing_address: billing_address || shipping_address,
             payment_method,
-            status: "pending",
-            payment_status: "pending",
+            status: req.body.stripe_session_id ? "processing" : "pending",
+            payment_status: (payment_method === "card" || req.body.stripe_session_id) ? "paid" : "pending",
+            stripe_session_id: req.body.stripe_session_id || null
         });
 
         await newOrder.save({ session });
@@ -79,15 +91,7 @@ export const createOrder = asyncHandler(async (req, res) => {
         session.endSession();
 
         // Activity Log
-        await Create_Log_Entry({
-            body: {
-                user_id: userId,
-                action: `${ACTIVITY_LOG_ACTIONS.ORDER_CREATED}: Order ID ${newOrder._id}`,
-                reference_id: newOrder._id,
-            },
-        }, {
-            status: () => ({ json: () => { } }),
-        });
+        await createLog(userId, `${ACTIVITY_LOG_ACTIONS.ORDER_CREATED}: Order ID ${newOrder._id}`, newOrder._id);
 
         return res.status(201).json(
             new apiResponse(201, "Order created successfully", newOrder)
@@ -175,15 +179,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     await order.save();
 
     // Activity Log
-    await Create_Log_Entry({
-        body: {
-            user_id: req.user._id,
-            action: `${ACTIVITY_LOG_ACTIONS.ORDER_STATUS_UPDATED}: Order ID ${order._id} to ${status || order.status}`,
-            reference_id: order._id,
-        },
-    }, {
-        status: () => ({ json: () => { } }),
-    });
+    await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.ORDER_STATUS_UPDATED}: Order ID ${order._id} to ${status || order.status}`, order._id);
 
     return res.status(200).json(
         new apiResponse(200, "Order status updated successfully", order)

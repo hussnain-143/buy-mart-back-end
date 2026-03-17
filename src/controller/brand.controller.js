@@ -3,6 +3,7 @@ import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Create_Log_Entry } from "./log.controller.js";
+import { createLog } from "../service/log.services.js";
 import { getCache, setCache, deleteCache } from "../utils/redis.util.js";
 import {
   REDIS_KEY_BRANDS,
@@ -48,15 +49,7 @@ export const addBrand = asyncHandler(async (req, res) => {
   await clearBrandCaches(userId);
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.BRAND_CREATED}: ${newBrand.name}`,
-      reference_id: newBrand._id,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.BRAND_CREATED}: ${newBrand.name}`, newBrand._id);
 
   return res.status(201).json(
     new apiResponse(201, "Brand added successfully", newBrand)
@@ -134,15 +127,7 @@ export const approveBrand = asyncHandler(async (req, res) => {
   await clearBrandCaches(brand.user_id);
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: req.user._id,
-      action: `${ACTIVITY_LOG_ACTIONS.BRAND_APPROVED}: ${brand.name}`,
-      reference_id: brand._id,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(req.user._id, `${ACTIVITY_LOG_ACTIONS.BRAND_APPROVED}: ${brand.name}`, brand._id);
 
   return res.status(200).json(
     new apiResponse(200, "Brand approved successfully", brand)
@@ -172,15 +157,7 @@ export const updateBrandStatus = asyncHandler(async (req, res) => {
   await clearBrandCaches(userId);
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.BRAND_STATUS_TOGGLED} to ${brand.isActive ? "active" : "inactive"} for ${brand.name}`,
-      reference_id: brand._id,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.BRAND_STATUS_TOGGLED} to ${brand.isActive ? "active" : "inactive"} for ${brand.name}`, brand._id);
 
   return res.status(200).json(
     new apiResponse(200, `Brand has been ${brand.isActive ? "activated" : "deactivated"} successfully`, brand)
@@ -213,15 +190,7 @@ export const deleteBrand = asyncHandler(async (req, res) => {
   await clearBrandCaches(brandOwnerId);
 
   // Activity Log
-  await Create_Log_Entry({
-    body: {
-      user_id: userId,
-      action: `${ACTIVITY_LOG_ACTIONS.BRAND_DELETED}: ${brandName}`,
-      reference_id: null,
-    },
-  }, {
-    status: () => ({ json: () => { } }),
-  });
+  await createLog(userId, `${ACTIVITY_LOG_ACTIONS.BRAND_DELETED}: ${brandName}`, null);
 
   return res.status(200).json(
     new apiResponse(200, "Brand deleted successfully")

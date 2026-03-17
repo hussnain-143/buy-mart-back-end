@@ -43,6 +43,11 @@ const OrderSchema = new Schema(
       enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
     },
+    stripe_session_id: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
   },
   { timestamps: true }
 );

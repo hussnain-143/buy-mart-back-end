@@ -10,7 +10,7 @@ import {
     getAdminProducts,
     toggleProductStatus
 } from "../controller/product.controller.js";
-import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { authMiddleware, isAdmin } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
@@ -18,18 +18,18 @@ const router = Router();
 // Public Routes
 router.get("/", getAllProducts);
 router.get("/ai-search", aiSearch);
+
+// Admin Routes (Static first)
+router.get("/admin/all", authMiddleware, isAdmin, getAdminProducts);
+router.patch("/admin/:id/toggle-status", authMiddleware, isAdmin, toggleProductStatus);
+
+// Protected Routes (Static first)
+router.get("/vendor", authMiddleware, getVendorProducts);
+router.post("/", authMiddleware, upload.array("images", 5), addProduct);
+router.put("/:id", authMiddleware, updateProduct);
+router.delete("/:id", authMiddleware, deleteProduct);
+
+// Public / Protected (Param based last)
 router.get("/:id", getProductById);
-
-// Protected Routes
-router.use(authMiddleware);
-router.get("/vendor", getVendorProducts);
-router.post("/", upload.array("images", 5), addProduct);
-router.put("/:id", updateProduct);
-router.delete("/:id", deleteProduct);
-
-// Admin Routes
-import { isAdmin } from "../middlewares/auth.middleware.js";
-router.get("/admin/all", isAdmin, getAdminProducts);
-router.patch("/admin/:id/toggle-status", isAdmin, toggleProductStatus);
 
 export const productRoutes = router;
