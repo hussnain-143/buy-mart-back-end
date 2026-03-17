@@ -158,7 +158,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         sort,
-        populate: ["category_id", "brand_id", "vendor_id"]
+        populate: ["category_id", "brand_id", "vendor_id", "images_id"]
     };
 
     const products = await Product.paginate(query, options);
@@ -173,9 +173,9 @@ const getProductById = asyncHandler(async (req, res) => {
     // Support both SKU and ID
     let product;
     if (mongoose.Types.ObjectId.isValid(id)) {
-        product = await Product.findById(id).populate(["category_id", "brand_id", "vendor_id"]);
+        product = await Product.findById(id).populate(["category_id", "brand_id", "vendor_id", "images_id"]);
     } else {
-        product = await Product.findOne({ sku: id }).populate(["category_id", "brand_id", "vendor_id"]);
+        product = await Product.findOne({ sku: id }).populate(["category_id", "brand_id", "vendor_id", "images_id"]);
     }
 
     if (!product) throw new apiError(404, "Product not found");
@@ -202,7 +202,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 
 // Admin All Products
 const getAdminProducts = asyncHandler(async (req, res) => {
-    const products = await Product.find().populate(["category_id", "brand_id", "vendor_id"]).sort("-createdAt");
+    const products = await Product.find().populate(["category_id", "brand_id", "vendor_id", "images_id"]).sort("-createdAt");
     return res.status(200).json(new apiResponse(200, "Admin products fetched successfully", products));
 });
 
@@ -212,7 +212,7 @@ const getVendorProducts = asyncHandler(async (req, res) => {
     if (!vendorId) {
         throw new apiError(404, "Vendor profile not found");
     }
-    const products = await Product.find({ vendor_id: vendorId }).populate(["category_id", "brand_id"]).sort("-createdAt");
+    const products = await Product.find({ vendor_id: vendorId }).populate(["category_id", "brand_id", "images_id"]).sort("-createdAt");
     return res.status(200).json(new apiResponse(200, "Vendor products fetched successfully", products));
 });
 

@@ -93,8 +93,8 @@ export const createProductCheckoutSession = asyncHandler(async (req, res, next) 
         currency: "usd",
         product_data: {
           name: item.product_id.name,
-          images: [item.product_id.images?.[0]?.url || ""],
-          description: item.product_id.description?.substring(0, 100),
+          images: item.product_id.images_id?.[0]?.image_url ? [item.product_id.images_id[0].image_url] : [],
+          description: item.product_id.desc?.substring(0, 100),
         },
         unit_amount: Math.round((item.product_id.discount_price > 0 ? item.product_id.discount_price : item.product_id.price) * 100),
       },
