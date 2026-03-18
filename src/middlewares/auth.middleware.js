@@ -9,6 +9,10 @@ import { options, REDIS_KEY_USER_PREFIX } from "../constant.js";
  * @param {boolean} ignoreExpiration - Whether to allow expired tokens (e.g., for logout)
  */
 const authenticate = async (req, res, next, ignoreExpiration = false) => {
+  if (typeof next !== 'function') {
+    return res.status(500).json({ success: false, message: "DEBUG: next is not a function at start of authenticate", stack: new Error().stack });
+  }
+
   try {
     // 1. Get token from cookies (primary) or Authorization header (fallback)
     let token = req.cookies?.accessToken;
@@ -50,6 +54,10 @@ const authenticate = async (req, res, next, ignoreExpiration = false) => {
     req.user = user;
     next();
   } catch (error) {
+    if (typeof next !== 'function') {
+      return res.status(500).json({ success: false, message: "DEBUG: next is not a function in authenticate catch block", originalError: error.message });
+    }
+
     if (error.name === "TokenExpiredError") {
       return next(new apiError(401, "Access token expired"));
     }
