@@ -22,13 +22,7 @@ export const createOrder = asyncHandler(async (req, res) => {
         throw new apiError(400, "Shipping address and payment method are required");
     }
 
-    // Get cart items
-    const cartItems = await Cart.find({ user_id: userId }).populate("product_id");
-    if (cartItems.length === 0) {
-        throw new apiError(400, "Cart is empty");
-    }
-
-    // If stripe session is provided, check for existing order to prevent duplicates
+    // If stripe session is provided, check for existing order to prevent duplicates early
     if (req.body.stripe_session_id) {
         const existingOrder = await Order.findOne({ stripe_session_id: req.body.stripe_session_id });
         if (existingOrder) {
@@ -36,6 +30,12 @@ export const createOrder = asyncHandler(async (req, res) => {
                 new apiResponse(200, "Order already processed", existingOrder)
             );
         }
+    }
+
+    // Get cart items
+    const cartItems = await Cart.find({ user_id: userId }).populate("product_id");
+    if (cartItems.length === 0) {
+        throw new apiError(400, "Cart is empty");
     }
 
     const session = await mongoose.startSession();
