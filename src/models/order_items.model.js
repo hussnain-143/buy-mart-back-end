@@ -40,9 +40,8 @@ const OrderItemSchema = new Schema(
 OrderItemSchema.index({ order_id: 1, product_id: 1 }, { unique: true });
 
 // Pre-save hook to calculate total_price
-OrderItemSchema.pre("save", function (next) {
+OrderItemSchema.pre("save", function () {
   this.total_price = this.unit_price * this.quantity;
-  next();
 });
 
 export const OrderItemModel = model("OrderItem", OrderItemSchema);
